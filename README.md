@@ -53,7 +53,8 @@ Documentation for additional inputs (classical media and quantum systems) will b
 
 ## Output
 
-Currently, the code does not generate output files. Output support will be added in future updates.
+The variables `mxll_n_detector` and `mxll_dt_det_print` of the `inp` file control how many outputs will be printed and how often. These outputs correspond to the components of the electric and magnetic fields at a point, along a line, on a surface or in an entire volume, depending on the dimensionality of the simulation box. These details have to be included in a file named `detectors.in`, and the number of lines must be equal to `mxll_n_detector`. Each detector will be printed in one or many files in a directory called `detector_xxxxxxx`. The number of the directory is equal to the corresponding line of the detector declared in the file `detectors.in`. For more details about the content of this file, check the subroutine `init_outputs` in `outputs_mod.f90`, and `init_detector` in `detector_mod.f90`.
+More detailed information will be provided in the future documentation.
 
 ## Publications
 
