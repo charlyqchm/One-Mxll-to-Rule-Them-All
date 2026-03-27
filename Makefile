@@ -14,6 +14,7 @@ LIB_DIR=$(DFTB_INSTALL)/lib
 
 SRC:=constants_mod.f90
 SRC+=input_mod.f90
+SRC+=detector_mod.f90
 SRC+=source_mod.f90
 SRC+=classical_medium_mod.f90
 SRC+=mxll_base_mod.f90
@@ -25,6 +26,7 @@ SRC+=q_sys_dftb_mod.f90
 SRC+=factory_mod.f90
 SRC+=q_group_mod.f90
 SRC+=parallel_subs_mod.f90
+SRC+=output_mod.f90
 SRC+=interactions_mod.f90
 MAIN=mxim_mxll.f90
 MOD=${SRC:.f90=.mod}

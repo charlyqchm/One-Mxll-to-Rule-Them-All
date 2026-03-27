@@ -11,13 +11,8 @@ module mxll_3D_mod
         type(TClassicalMedium), allocatable :: media(:)
 
         integer               :: nx,ny, nz
-        integer               :: npml
-        integer               :: n_media
         integer               :: boundaries(3)
         integer               :: n_cpml_sections
-        real(dp)              :: dt_mu0
-        real(dp)              :: dt_eps0
-        real(dp)              :: dr
         logical               :: cpml_pos(6) !Indicates if the rank has some of the
                                                ! 6 possible CPML boundaries.
         integer     , allocatable :: media_map(:,:,:,:)
@@ -109,6 +104,7 @@ contains
         this%dr            = dr
         this%dt_eps0       = dt/eps0
         this%dt_mu0        = dt/mu0
+        this%dt            = dt
 
         if (.not. allocated(this%den_ex))   allocate(this%den_ex(nx))
         if (.not. allocated(this%den_ey))   allocate(this%den_ey(ny))
@@ -727,7 +723,7 @@ contains
         !MPI subroutines will handle the periodic boundaries.
 #else
         if (this%boundaries(1) == PERIODIC_BOUNDARIES) then
-            this%Hy(0,:,:) = this%Hx(nx,:,:)
+            this%Hy(0,:,:) = this%Hy(nx,:,:)
             this%Hz(0,:,:) = this%Hz(nx,:,:)
         end if
 
@@ -922,10 +918,6 @@ contains
                 end do
             end do
             end do    
-        end if
-
-        if (this%chunk_coor(1) == 0 .and. this%chunk_coor(2) == 0 .and. this%chunk_coor(3) == 0) then
-            write(700,*) this%Ez(30,70,70)
         end if
 
     end subroutine td_propagate_E_3Dfield

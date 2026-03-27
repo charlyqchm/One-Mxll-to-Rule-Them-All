@@ -420,37 +420,6 @@ subroutine read_init_media_2D(media, n_media, eps_x, eps_y, eps_z, grid_Ndims, d
                     read (unit=funit, fmt=*) eps_read
                     call media(n)%init_classical_medium(medium_type_ch=medium_type_ch,eps_r=eps_read)
 
-                    do
-
-                        read (unit=funit, fmt=*, iostat=ierr) x, y
-                        if (ierr /= 0) exit
-                        
-                        ii = int(x/dr) + int(grid_Ndims(1)*mpi_dims(1)/2)
-                        jj = int(y/dr) + int(grid_Ndims(2)*mpi_dims(2)/2)
-
-                        if (media_map(ii,jj,1)/= 0) then
-                            write (*, '("Error: medium ",I4.4," overlaps medium ",I4.4)') &
-                            media_map(ii,jj,1), n
-                        else
-                            media_map(ii,jj,1) = n
-                        end if
-
-                        if (media_map(ii,jj,2)/= 0) then
-                            write (*, '("Error: medium ",I4.4," overlaps medium ",I4.4)') &
-                            media_map(ii,jj,2), n
-                        else
-                            media_map(ii,jj,2) = n
-                        end if
-
-                        if (media_map(ii,jj,3)/= 0) then
-                            write (*, '("Error: medium ",I4.4," overlaps medium ",I4.4)') &
-                            media_map(ii,jj,3), n
-                        else
-                            media_map(ii,jj,3) = n
-                        end if
-
-                    end do
-                   
                 case ("drude")
                     read (unit=funit, fmt=*) omegaD, GammaD, eps_read
 
@@ -521,20 +490,32 @@ subroutine read_init_media_2D(media, n_media, eps_x, eps_y, eps_z, grid_Ndims, d
                 i_ndx = i - i_min + 1
                 j_ndx = j - j_min + 1
 
-                if (media_map_aux(i,j,1) == n .and. media_map_aux(i+1,j,1) == n) then
+                if (i == nx_tot .and. media_map_aux(i,j,1) == n) then
+                
                     media_map(i_ndx,j_ndx,1) = n
-                else if (media_map_aux(i,j,1) /= 0 .and. media_map_aux(i+1,j,1) == n) then
-                     media_map(i_ndx,j_ndx,1) = n
-                end if
+                
+                else if (j == ny_tot .and. media_map_aux(i,j,1) == n) then
+                
+                    media_map(i_ndx,j_ndx,1) = n
+                
+                else
 
-                if (media_map_aux(i,j,2) == n .and. media_map_aux(i,j+1,2) == n) then
-                    media_map(i_ndx,j_ndx,2) = n
-                else if (media_map_aux(i,j,2) /= 0 .and. media_map_aux(i,j+1,2) == n) then
-                     media_map(i_ndx,j_ndx,2) = n
-                end if
+                    if (media_map_aux(i,j,1) == n .and. media_map_aux(i+1,j,1) == n) then
+                        media_map(i_ndx,j_ndx,1) = n
+                    else if (media_map_aux(i,j,1) /= 0 .and. media_map_aux(i+1,j,1) == n) then
+                        media_map(i_ndx,j_ndx,1) = n
+                    end if
 
-                if (media_map_aux(i,j,3) == n) then
-                    media_map(i_ndx,j_ndx,3) = n
+                    if (media_map_aux(i,j,2) == n .and. media_map_aux(i,j+1,2) == n) then
+                        media_map(i_ndx,j_ndx,2) = n
+                    else if (media_map_aux(i,j,2) /= 0 .and. media_map_aux(i,j+1,2) == n) then
+                        media_map(i_ndx,j_ndx,2) = n
+                    end if
+
+                    if (media_map_aux(i,j,3) == n) then
+                        media_map(i_ndx,j_ndx,3) = n
+                    end if
+
                 end if
 
             end if
@@ -722,22 +703,39 @@ subroutine read_init_media_2D(media, n_media, eps_x, eps_y, eps_z, grid_Ndims, d
                 j_ndx = j - j_min + 1
                 k_ndx = k - k_min + 1
 
-                if (media_map_aux(i,j,k,1) == n .and. media_map_aux(i+1,j,k,1) == n) then
-                    media_map(i_ndx,j_ndx, k_ndx,1) = n
-                else if (media_map_aux(i,j,k,1) /= 0 .and. media_map_aux(i+1,j,k,1) == n) then
-                     media_map(i_ndx,j_ndx, k_ndx,1) = n
-                end if
+                if (i == nx_tot .and. media_map_aux(i,j,k,1) == n) then
+                
+                    media_map(i_ndx,j_ndx,k_ndx,1) = n
+                
+                else if (j == ny_tot .and. media_map_aux(i,j,k,1) == n) then
+                
+                    media_map(i_ndx,j_ndx,k_ndx,1) = n
+                
+                else if (k == nz_tot .and. media_map_aux(i,j,k,1) == n) then
+                
+                    media_map(i_ndx,j_ndx,k_ndx,1) = n
+                
+                else
 
-                if (media_map_aux(i,j,k,2) == n .and. media_map_aux(i,j+1,k,2) == n) then
-                    media_map(i_ndx,j_ndx, k_ndx,2) = n
-                else if (media_map_aux(i,j,k,2) /= 0 .and. media_map_aux(i,j+1,k,2) == n) then
-                     media_map(i_ndx,j_ndx, k_ndx,2) = n
-                end if
 
-                if (media_map_aux(i,j,k,3) == n .and. media_map_aux(i,j,k+1,3) == n) then
-                    media_map(i_ndx,j_ndx, k_ndx,3) = n
-                else if (media_map_aux(i,j,k,3) /= 0 .and. media_map_aux(i,j,k+1,3) == n) then
-                     media_map(i_ndx,j_ndx, k_ndx,3) = n
+                    if (media_map_aux(i,j,k,1) == n .and. media_map_aux(i+1,j,k,1) == n) then
+                        media_map(i_ndx,j_ndx, k_ndx,1) = n
+                    else if (media_map_aux(i,j,k,1) /= 0 .and. media_map_aux(i+1,j,k,1) == n) then
+                        media_map(i_ndx,j_ndx, k_ndx,1) = n
+                    end if
+
+                    if (media_map_aux(i,j,k,2) == n .and. media_map_aux(i,j+1,k,2) == n) then
+                        media_map(i_ndx,j_ndx, k_ndx,2) = n
+                    else if (media_map_aux(i,j,k,2) /= 0 .and. media_map_aux(i,j+1,k,2) == n) then
+                        media_map(i_ndx,j_ndx, k_ndx,2) = n
+                    end if
+
+                    if (media_map_aux(i,j,k,3) == n .and. media_map_aux(i,j,k+1,3) == n) then
+                        media_map(i_ndx,j_ndx, k_ndx,3) = n
+                    else if (media_map_aux(i,j,k,3) /= 0 .and. media_map_aux(i,j,k+1,3) == n) then
+                        media_map(i_ndx,j_ndx, k_ndx,3) = n
+                    end if
+
                 end if
 
             end if

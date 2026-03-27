@@ -8,12 +8,15 @@ program mxim_mxll
     use interactions_mod
     use parallel_subs_mod
     use q_group_mod
+    use detector_mod
+    use outputs_mod
 
     implicit none
 
-    class(TMxll),   allocatable :: mxll
-    type(TSource),  allocatable :: source_list(:)
-    type(TQ_group), allocatable :: q_groups(:)
+    class(TMxll),    allocatable :: mxll
+    type(TSource),   allocatable :: source_list(:)
+    type(TQ_group),  allocatable :: q_groups(:)
+    type(TDetector), allocatable :: detectors(:)
     integer                     :: boundaries(3)
     integer                     :: mode_2D
     integer                     :: mpi_coords(3) = 0
@@ -28,12 +31,16 @@ program mxim_mxll
     integer                     :: Nt
     integer                     :: Nt_q
     integer                     :: tt_0
+    integer                     :: n_detectors
+    integer                     :: t_det_print
+    integer                     :: print_det_step = 0 ! Counter of the printing seps of the detectors.
     logical                     :: move_q_system
     real(dp)                    :: dr 
     real(dp)                    :: dt
     real(dp)                    :: dt_q
     real(dp)                    :: density_factor
     real(dp)                    :: eps_r
+    real(dp)                    :: dt_det_print
 
     integer  :: tt
     integer  :: i, j
@@ -42,7 +49,7 @@ program mxim_mxll
     !TO-DO: With a huge number of MPI_ranks, this subroutine may be a bottleneck.
     call read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
                          Nt, dr, dt, dt_q, density_factor, mpi_dims, eps_r, n_src, n_media, &
-                         n_q_groups)
+                         n_q_groups, n_detectors, dt_det_print)
 
     n_procs = mpi_dims(1)*mpi_dims(2)*mpi_dims(3)
 
@@ -56,6 +63,9 @@ program mxim_mxll
 
     call mxll%init(grid_Ndims, npml, boundaries, dt, dr, mode_2D, n_media, mpi_coords, mpi_dims) 
     
+    call init_outputs(n_detectors, t_det_print, dt_det_print, detectors, dimensions, &
+                       grid_Ndims, mxll%mode, dr, dt, mpi_dims, mpi_coords, myrank)
+
     !Define the real time step for the quantum system (smaller than the mxll dt)
     mxll%n_skip_steps = 1
     if (dt_q > dt) mxll%n_skip_steps = NINT(dt_q/dt)
@@ -107,6 +117,11 @@ program mxim_mxll
         end do 
         call expand_J_field_between_ranks(mxll, move_q_system)
 
+        call extend_fields_to_detectors(mxll, detectors, n_detectors, tt, t_det_print)
+
+        call write_detectors_outputs(detectors, mxll, n_detectors, tt, print_det_step, &
+                                   t_det_print, time, dr, grid_Ndims, mpi_dims, mpi_coords, myrank)
+
     end do
 
     call kill_sources(source_list, n_src)
@@ -114,6 +129,9 @@ program mxim_mxll
     do i = 1, n_q_groups
         call q_groups(i)%kill_q_group()
     end do
+
+    call kill_outputs(detectors, n_detectors)
+
     if (allocated(mxll))     deallocate(mxll)
     if (allocated(q_groups)) deallocate(q_groups)
     call finalize_parallelization()

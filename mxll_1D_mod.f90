@@ -12,11 +12,6 @@ module mxll_1D_mod
 
         integer               :: nz
         integer               :: boundaries
-        integer               :: npml
-        integer               :: n_media
-        real(dp)              :: dt_mu0
-        real(dp)              :: dt_eps0
-        real(dp)              :: dr
 
         integer      , allocatable :: media_map(:)
         real(dp)     , allocatable :: Ex(:)
@@ -90,6 +85,7 @@ contains
         this%dr         = dr
         this%dt_eps0    = dt/eps0
         this%dt_mu0     = dt/mu0
+        this%dt         = dt
         this%npml       = npml
 
         if (.not. allocated(this%Ex))       allocate(this%Ex(nz))

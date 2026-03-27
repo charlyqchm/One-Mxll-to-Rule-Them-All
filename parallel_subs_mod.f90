@@ -9,6 +9,7 @@ module parallel_subs_mod
     use mxll_2D_mod
     use mxll_3D_mod
     use q_group_mod
+    use detector_mod
 
     implicit none
 
@@ -336,6 +337,36 @@ subroutine expand_J_field_between_ranks(mxll, move_q_system)
 #endif
 
 end subroutine expand_J_field_between_ranks
+
+!###################################################################################################
+
+subroutine extend_fields_to_detectors(mxll, detectors, n_detectors, t_step, t_det_print)
+
+    class(TMxll), intent(inout) :: mxll
+    type(TDetector), intent(in) :: detectors(:)
+    integer, intent(in) :: n_detectors
+    integer, intent(in) :: t_step
+    integer, intent(in) :: t_det_print
+
+    
+#ifdef USE_MPI
+    if (MOD(t_step, t_det_print) /= 0) return
+    
+    select type(mxll)
+    class is(TMxll_1D)
+        return
+    class is(TMxll_2D)
+        call extend_fields_to_detectors_2D(mxll, detectors, n_detectors)
+    class is(TMxll_3D)
+        call extend_fields_to_detectors_3D(mxll, detectors, n_detectors)
+    end select
+
+#else
+    return
+
+#endif
+
+end subroutine extend_fields_to_detectors
 
 !###################################################################################################
 
@@ -800,7 +831,7 @@ subroutine expand_E_field_2D(mxll)
         mpi_double_precision, &                          !<=== type
         Ynext, &                                         !<=== where sending
         MPI_GOOD_TAG, &                                  !<=== sending tag
-        mxll%Ex(1:nx, 0), &                       !<=== receiving
+        mxll%Ey(1:nx, 0), &                       !<=== receiving
         nx, &                                       !<=== the size
         mpi_double_precision, &                          !<=== type
         Yprev, &                                         !<=== receiving from where
@@ -1091,4 +1122,173 @@ subroutine expand_J_field_3D(mxll)
 end subroutine expand_J_field_3D
 
 !###################################################################################################
+
+subroutine extend_fields_to_detectors_2D(mxll, detectors, n_detectors)
+    class(TMxll_2D), intent(inout) :: mxll
+    type(TDetector), intent(in)    :: detectors(:)
+    integer        , intent(in)    :: n_detectors
+
+    integer :: nx
+    integer :: ny
+    integer :: i
+    logical :: exchange_Ex=.false.
+    logical :: exchange_Ey=.false.
+    logical :: exchange_Hx=.false.
+    logical :: exchange_Hy=.false.
+    logical :: exchange_Hz=.false.
+
+#ifdef USE_MPI
+
+    integer :: ierr
+    integer :: istatus(MPI_STATUS_SIZE)
+
+    nx = mxll%nx
+    ny = mxll%ny
+
+    do i =1, n_detectors
+        if (detectors(i)%field == Ex_FIELD) then
+            exchange_Ex = .true.
+        else if (detectors(i)%field == Ey_FIELD) then
+            exchange_Ey = .true.
+        end if    
+    end do
+
+    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+
+    if (exchange_Ex) then
+        call mpi_sendrecv(mxll%Ex(nx, 1:ny), &  !<=== sending
+        ny, &                                       !<=== the size
+        mpi_double_precision, &                          !<=== type
+        Xnext, &                                         !<=== where sending
+        MPI_GOOD_TAG, &                                  !<=== sending tag
+        mxll%Ex(0, 1:ny), &               !<=== receiving
+        ny, &                                       !<=== the size
+        mpi_double_precision, &                          !<=== type
+        Xprev, &                                         !<=== receiving from where
+        MPI_GOOD_TAG, &                                  !<=== receiving tag
+        cartesian_comm, &                                !<=== handle of Cartesian coordinates
+        istatus, &                                       !<=== istatus
+        ierr)                                            !<=== error code
+    end if
+
+    if (exchange_Ey) then
+        call mpi_sendrecv(mxll%Ey(1:nx, ny), &  !<=== sending
+        nx, &                                       !<=== the size
+        mpi_double_precision, &                          !<=== type
+        Ynext, &                                         !<=== where sending
+        MPI_GOOD_TAG, &                                  !<=== sending tag
+        mxll%Ey(1:nx, 0), &                       !<=== receiving
+        nx, &                                       !<=== the size
+        mpi_double_precision, &                          !<=== type
+        Yprev, &                                         !<=== receiving from where
+        MPI_GOOD_TAG, &                                  !<=== receiving tag
+        cartesian_comm, &                                !<=== handle of Cartesian coordinates
+        istatus, &                                       !<=== istatus
+        ierr)                                            !<=== error code
+    end if
+
+    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+
+#else
+    return
+
+#endif
+
+end subroutine extend_fields_to_detectors_2D
+
+!###################################################################################################
+
+subroutine extend_fields_to_detectors_3D(mxll, detectors, n_detectors)
+    class(TMxll_3D), intent(inout) :: mxll
+    type(TDetector), intent(in)    :: detectors(:)
+    integer        , intent(in)    :: n_detectors
+
+    integer :: nx
+    integer :: ny
+    integer :: nz
+    integer :: i
+    logical :: exchange_Ex=.false.
+    logical :: exchange_Ey=.false.
+    logical :: exchange_Ez=.false.
+
+#ifdef USE_MPI
+
+    integer :: ierr
+    integer :: istatus(MPI_STATUS_SIZE)
+
+    nx = mxll%nx
+    ny = mxll%ny
+    nz = mxll%nz
+
+    do i =1, n_detectors
+        if (detectors(i)%field == Ex_FIELD) then
+            exchange_Ex = .true.
+        else if (detectors(i)%field == Ey_FIELD) then
+            exchange_Ey = .true.
+        else if (detectors(i)%field == Ez_FIELD) then
+            exchange_Ez = .true.
+        end if    
+    end do
+
+    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+
+    if (exchange_Ex) then
+        call mpi_sendrecv(mxll%Ex(nx, 1:ny, 1:nz), &  !<=== sending
+        ny*nz, &                                       !<=== the size
+        mpi_double_precision, &                          !<=== type
+        Xnext, &                                         !<=== where sending
+        MPI_GOOD_TAG, &                                  !<=== sending tag
+        mxll%Ex(0, 1:ny, 1:nz), &               !<=== receiving
+        ny*nz, &                                       !<=== the size
+        mpi_double_precision, &                          !<=== type
+        Xprev, &                                         !<=== receiving from where
+        MPI_GOOD_TAG, &                                  !<=== receiving tag
+        cartesian_comm, &                                !<=== handle of Cartesian coordinates
+        istatus, &                                       !<=== istatus
+        ierr)                                            !<=== error code
+    end if
+
+    if (exchange_Ey) then
+        call mpi_sendrecv(mxll%Ey(1:nx, ny, 1:nz), &  !<=== sending
+        nx*nz, &                                       !<=== the size
+        mpi_double_precision, &                          !<=== type
+        Ynext, &                                         !<=== where sending
+        MPI_GOOD_TAG, &                                  !<=== sending tag
+        mxll%Ey(1:nx, 0, 1:nz), &               !<=== receiving
+        nx*nz, &                                       !<=== the size
+        mpi_double_precision, &                          !<=== type
+        Yprev, &                                         !<=== receiving from where
+        MPI_GOOD_TAG, &                                  !<=== receiving tag
+        cartesian_comm, &                                !<=== handle of Cartesian coordinates
+        istatus, &                                       !<=== istatus
+        ierr)                                            !<=== error code
+    end if
+
+    if (exchange_Ez) then
+        call mpi_sendrecv(mxll%Ez(1:nx, 1:ny, nz), &  !<=== sending
+        nx*ny, &                                       !<=== the size
+        mpi_double_precision, &                          !<=== type
+        Znext, &                                         !<=== where sending
+        MPI_GOOD_TAG, &                                  !<=== sending tag
+        mxll%Ez(1:nx, 1:ny, 0), &               !<=== receiving
+        nx*ny, &                                       !<=== the size
+        mpi_double_precision, &                          !<=== type
+        Zprev, &                                         !<=== receiving from where
+        MPI_GOOD_TAG, &                                  !<=== receiving tag
+        cartesian_comm, &                                !<=== handle of Cartesian coordinates
+        istatus, &                                       !<=== istatus
+        ierr)                                            !<=== error code
+    end if
+
+    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+
+#else
+    return
+
+#endif
+
+end subroutine extend_fields_to_detectors_3D
+
+!###################################################################################################
+
 end module parallel_subs_mod

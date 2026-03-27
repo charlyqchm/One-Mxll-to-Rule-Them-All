@@ -18,6 +18,8 @@ module input_mod
     integer            :: mxll_n_media          = 0
     ! Number of quantum groups to check in the "mol_group_xxxxxxx.in" file.
     integer            :: mxll_n_q_groups       = 0
+    ! Number of detectors to check in the "detectors.in" file.
+    integer            :: mxll_n_detectors      = 0
     ! Number of MPI processes per axis, when running in parallel.
     integer            :: mpi_procs_per_axis(3) = 1
     ! Size of each dimension in nm for the Mxll simulation box. The origin is always moved at the center of the box.
@@ -30,6 +32,8 @@ module input_mod
     real(dp)           :: mxll_dt               = 10.0E10
     ! Quantum time step in fs.
     real(dp)           :: mxll_dt_q             = 0.01
+    ! Printing time step for the detectors in fs.
+    real(dp)           :: mxll_dt_det_print     = 0.0 
     ! Density factor in units of 1/nm^3.
     real(dp)           :: mxll_density_factor   = 1.0e-3
     ! Relative permittivity of the medium (for now, it is not used).
@@ -39,7 +43,7 @@ contains
 
 subroutine read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
                            Nt, dr, dt, dt_q, density_factor, mpi_dims, eps_r, n_src, n_media, &
-                           n_q_groups)
+                           n_q_groups, n_detectors, dt_det_print)
     
     integer   , intent(out) :: boundaries(3)
     integer   , intent(out) :: mode_2D
@@ -50,11 +54,13 @@ subroutine read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
     integer   , intent(out) :: n_src
     integer   , intent(out) :: n_media
     integer   , intent(out) :: n_q_groups
+    integer   , intent(out) :: n_detectors
     real(dp)  , intent(out) :: dr
     real(dp)  , intent(out) :: dt
     real(dp)  , intent(out) :: dt_q
     real(dp)  , intent(out) :: density_factor
     real(dp)  , intent(out) :: eps_r
+    real(dp)  , intent(out) :: dt_det_print
     integer   , intent(out) :: mpi_dims(3)
     integer :: ierr, funit
     integer :: i 
@@ -62,7 +68,7 @@ subroutine read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
     namelist /OMxRTA/ mxll_boundaries, mxll_2D_mode, mxll_dimensions, mxll_npml, &
                          mxll_n_src, mxll_box_size, mxll_total_time, mxll_dr, mxll_dt, &
                          mxll_density_factor, mxll_eps_r, mxll_n_media, mxll_n_q_groups, &
-                         mxll_dt_q, mpi_procs_per_axis
+                         mxll_dt_q, mpi_procs_per_axis, mxll_n_detectors, mxll_dt_det_print
 
     
     ! Check whether file exists.
@@ -107,12 +113,31 @@ subroutine read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
     n_src          = mxll_n_src
     n_media        = mxll_n_media
     n_q_groups     = mxll_n_q_groups
+    n_detectors    = mxll_n_detectors
     dr             = mxll_dr * nm_to_au
     dt             = MIN(dr/(2.0*c0), mxll_dt)
     dt_q           = mxll_dt_q
     Nt             = INT((DBLE(mxll_total_time)*fs_to_au)/(dt))
     density_factor = mxll_density_factor/(nm_to_au)**3
     eps_r          = mxll_eps_r
+    
+    if (n_detectors == 0) then
+        write(*, *) "Warning: No detectors specified."
+    else if (n_detectors < 0) then
+        write(*, *) "Error: n_detectors must be non-negative."
+        stop
+    end if
+
+    if (mxll_dt_det_print == M_ZERO) then
+        dt_det_print = dt
+        write(*, '("Warning: No printing time step (mxll_dt_det_print) for detectors specified")')
+        write(*, '("         Setting it equal to the Mxll time step mxll_dt = ", &
+              E12.4, "fs")') dt_det_print * au_to_fs
+    else
+        dt_det_print   = mxll_dt_det_print*fs_to_au
+    end if
+    
+
 
     select case (mxll_2D_mode)
     case ("TMz")
@@ -122,7 +147,8 @@ subroutine read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
     case ("full")
         mode_2D = FULL_2D_MODE
     case ("none")
-        write (*, '("none option selected for mxll_2D_mode")')  
+        write (*, '("none option selected for mxll_2D_mode")')
+        mode_2D = 0
     case default
         write (*, '("mxll_2D_mode: ", A)') mxll_2D_mode
         write (*, '("Error: invalid 2D mode")')

@@ -10,8 +10,15 @@ module mxll_base_mod
         integer  :: tq_step
         integer  :: tq_step_old
         integer  :: n_skip_steps
+        integer  :: n_media
+        integer  :: npml
+        integer  :: mode
         real(dp) :: time
         real(dp) :: t_skip
+        real(dp) :: dt_eps0
+        real(dp) :: dt_mu0
+        real(dp) :: dt
+        real(dp) :: dr
 !Temporal variable for testing. Remove when not needed anymore.
         integer  :: chunk_coor(3)
 

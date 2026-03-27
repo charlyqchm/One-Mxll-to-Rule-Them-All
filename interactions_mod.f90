@@ -27,6 +27,9 @@ subroutine source_interactions(mxll, source_list, n_sources)
     integer  :: i_id, j_id, k_id
     integer  :: n_ker
     real(dp) :: J_av
+    real(dp) :: c_src
+
+    c_src = mxll%dt_eps0/mxll%dr/c0/2.0d0
 
     select type(mxll)
     class is(TMxll_1D)
@@ -42,7 +45,7 @@ subroutine source_interactions(mxll, source_list, n_sources)
                 do i=-n_ker, n_ker
                     i_id = source_list(s)%ind_i(i,1,1)
                     J_av = source_list(s)%J_mat(i,1,1)
-                    mxll%Ex(i_id) = mxll%Ex(i_id) + mxll%dt_eps0 * J_av
+                    mxll%Ex(i_id) = mxll%Ex(i_id) + c_src * J_av
                 end do
             case default
                 print *, "Error: Unknown source direction in 1D mxll."
@@ -63,7 +66,7 @@ subroutine source_interactions(mxll, source_list, n_sources)
                         j_id = source_list(s)%ind_j(i,j,1)
                         J_av = 0.5d0*(source_list(s)%J_mat(i,j,1) + &
                                         source_list(s)%J_mat(i+1,j,1))
-                        mxll%Ex(i_id,j_id) = mxll%Ex(i_id,j_id) + mxll%dt_eps0 * J_av
+                        mxll%Ex(i_id,j_id) = mxll%Ex(i_id,j_id) + c_src * J_av
                     end if
                 end do
                 end do
@@ -75,7 +78,7 @@ subroutine source_interactions(mxll, source_list, n_sources)
                         j_id = source_list(s)%ind_j(i,j,1)
                         J_av = 0.5d0*(source_list(s)%J_mat(i,j,1) + &
                                         source_list(s)%J_mat(i,j+1,1))
-                        mxll%Ey(i_id,j_id) = mxll%Ey(i_id,j_id) + mxll%dt_eps0 * J_av
+                        mxll%Ey(i_id,j_id) = mxll%Ey(i_id,j_id) + c_src * J_av
                     end if
                 end do
                 end do
@@ -86,7 +89,7 @@ subroutine source_interactions(mxll, source_list, n_sources)
                         i_id = source_list(s)%ind_i(i,j,1)
                         j_id = source_list(s)%ind_j(i,j,1)
                         J_av = source_list(s)%J_mat(i,j,1)
-                        mxll%Ez(i_id,j_id) = mxll%Ez(i_id,j_id) + mxll%dt_eps0 * J_av
+                        mxll%Ez(i_id,j_id) = mxll%Ez(i_id,j_id) + c_src * J_av
                     end if
                 end do
                 end do
@@ -111,7 +114,7 @@ subroutine source_interactions(mxll, source_list, n_sources)
                         k_id = source_list(s)%ind_k(i,j,k)
                         J_av = 0.5d0*(source_list(s)%J_mat(i,j,k) + &
                                         source_list(s)%J_mat(i+1,j,k))
-                        mxll%Ex(i_id,j_id,k_id) = mxll%Ex(i_id,j_id,k_id) + mxll%dt_eps0 * J_av
+                        mxll%Ex(i_id,j_id,k_id) = mxll%Ex(i_id,j_id,k_id) + c_src * J_av
                     end if
                 end do
                 end do
@@ -126,7 +129,7 @@ subroutine source_interactions(mxll, source_list, n_sources)
                         k_id = source_list(s)%ind_k(i,j,k)
                         J_av = 0.5d0*(source_list(s)%J_mat(i,j,k) + &
                                         source_list(s)%J_mat(i,j+1,k))
-                        mxll%Ey(i_id,j_id,k_id) = mxll%Ey(i_id,j_id,k_id) + mxll%dt_eps0 * J_av
+                        mxll%Ey(i_id,j_id,k_id) = mxll%Ey(i_id,j_id,k_id) + c_src * J_av
                     end if
                 end do
                 end do
@@ -141,7 +144,7 @@ subroutine source_interactions(mxll, source_list, n_sources)
                         k_id = source_list(s)%ind_k(i,j,k)
                         J_av = 0.5d0*(source_list(s)%J_mat(i,j,k) + &
                                         source_list(s)%J_mat(i,j,k+1))
-                        mxll%Ez(i_id,j_id,k_id) = mxll%Ez(i_id,j_id,k_id) + mxll%dt_eps0 * J_av
+                        mxll%Ez(i_id,j_id,k_id) = mxll%Ez(i_id,j_id,k_id) + c_src * J_av
                     end if
                 end do
                 end do
