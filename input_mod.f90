@@ -33,7 +33,9 @@ module input_mod
     ! Quantum time step in fs.
     real(dp)           :: mxll_dt_q             = 0.01
     ! Printing time step for the detectors in fs.
-    real(dp)           :: mxll_dt_det_print     = 0.0 
+    real(dp)           :: mxll_dt_det_print     = 0.0
+    ! Printing time step for the quantum systems in fs.
+    real(dp)           :: mxll_dt_q_print       = 0.0
     ! Density factor in units of 1/nm^3.
     real(dp)           :: mxll_density_factor   = 1.0e-3
     ! Relative permittivity of the medium (for now, it is not used).
@@ -43,7 +45,7 @@ contains
 
 subroutine read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
                            Nt, dr, dt, dt_q, density_factor, mpi_dims, eps_r, n_src, n_media, &
-                           n_q_groups, n_detectors, dt_det_print)
+                           n_q_groups, n_detectors, dt_det_print, dt_q_print)
     
     integer   , intent(out) :: boundaries(3)
     integer   , intent(out) :: mode_2D
@@ -61,6 +63,7 @@ subroutine read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
     real(dp)  , intent(out) :: density_factor
     real(dp)  , intent(out) :: eps_r
     real(dp)  , intent(out) :: dt_det_print
+    real(dp)  , intent(out) :: dt_q_print
     integer   , intent(out) :: mpi_dims(3)
     integer :: ierr, funit
     integer :: i 
@@ -68,7 +71,8 @@ subroutine read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
     namelist /OMxRTA/ mxll_boundaries, mxll_2D_mode, mxll_dimensions, mxll_npml, &
                          mxll_n_src, mxll_box_size, mxll_total_time, mxll_dr, mxll_dt, &
                          mxll_density_factor, mxll_eps_r, mxll_n_media, mxll_n_q_groups, &
-                         mxll_dt_q, mpi_procs_per_axis, mxll_n_detectors, mxll_dt_det_print
+                         mxll_dt_q, mpi_procs_per_axis, mxll_n_detectors, mxll_dt_det_print, &
+                         mxll_dt_q_print
 
     
     ! Check whether file exists.
@@ -120,7 +124,7 @@ subroutine read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
     Nt             = INT((DBLE(mxll_total_time)*fs_to_au)/(dt))
     density_factor = mxll_density_factor/(nm_to_au)**3
     eps_r          = mxll_eps_r
-    
+
     if (n_detectors == 0) then
         write(*, *) "Warning: No detectors specified."
     else if (n_detectors < 0) then
@@ -128,15 +132,32 @@ subroutine read_input_file(boundaries, mode_2D, dimensions, npml, grid_Ndims, &
         stop
     end if
 
-    if (mxll_dt_det_print == M_ZERO) then
+    if (mxll_dt_det_print == M_ZERO .and. mxll_n_detectors > 0) then
         dt_det_print = dt
         write(*, '("Warning: No printing time step (mxll_dt_det_print) for detectors specified")')
         write(*, '("         Setting it equal to the Mxll time step mxll_dt = ", &
               E12.4, "fs")') dt_det_print * au_to_fs
-    else
+    else if ((mxll_dt_det_print < dt*au_to_fs) .and. (mxll_n_detectors > 0)) then
+        write(*, '("Error: mxll_dt_det_print must be greater than or equal to the Mxll time step mxll_dt = ", &
+              E12.4, "fs")') dt * au_to_fs
+        stop
+    else if (mxll_n_detectors > 0) then
         dt_det_print   = mxll_dt_det_print*fs_to_au
     end if
     
+
+    if (mxll_dt_q_print == M_ZERO .and. mxll_n_q_groups > 0) then
+        dt_q_print = dt
+        write(*, '("Warning: No printing time step (mxll_dt_q_print) for quantum system specified")')
+        write(*, '("         Setting it equal to the quantum system time step dt_q = ", &
+              E12.4, "fs")') dt_q_print * au_to_fs
+    else if ((mxll_dt_q_print < dt_q*au_to_fs) .and. (mxll_n_q_groups > 0)) then
+        write(*, '("Error: mxll_dt_q_print must be greater than or equal to the quantum system time step dt_q = ", &
+              E12.4, "fs")') dt_q * au_to_fs
+        stop
+    else if (mxll_n_q_groups > 0) then
+        dt_q_print   = mxll_dt_q_print*fs_to_au
+    end if
 
 
     select case (mxll_2D_mode)

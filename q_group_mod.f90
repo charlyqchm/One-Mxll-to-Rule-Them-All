@@ -18,6 +18,7 @@ module q_group_mod
         integer :: n_sys_loc
         integer :: n_ker=3 !this value is harcoded for avoiding memeory issues.
         integer :: Nt_steps
+        integer :: print_option
         real(dp):: dt
         real(dp):: density
 
@@ -72,7 +73,9 @@ contains
         character(len=20)  :: file_name = "mol_group_"
         character(len=20)  :: file_exten = ".in"
         character(len=20)  :: file_number
+        character(len=50)  :: print_option_ch
         character(len=50)  :: input_name
+        character(len=20)  :: print_on_ch
         real(dp)           :: r0
         real(dp)           :: r_max
         real(dp)           :: x, y, z
@@ -87,6 +90,7 @@ contains
         integer            :: n_ker
         integer , allocatable :: mol_id(:)
         integer , allocatable :: id_file(:)
+        logical , allocatable :: print_on(:)
         real(dp), allocatable :: grid_coord(:,:)
 
         this%dt = dt
@@ -105,7 +109,8 @@ contains
             stop
         end if      
 
-        read (unit=funit,fmt=*, iostat=ierr) group_type_str, q_sys_type_str, n_systems
+        read (unit=funit,fmt=*, iostat=ierr) group_type_str, q_sys_type_str, n_systems, &
+                                             print_option_ch
 
         this%n_systems = n_systems
         n_total_ranks  = mpi_dims(1)*mpi_dims(2)*mpi_dims(3)
@@ -117,6 +122,20 @@ contains
             this%n_sys_loc = this%n_sys_loc + 1
         end if
 
+        select case(trim(print_option_ch))
+        case ("print_none")
+            this%print_option = PRINT_NONE
+        case ("print_all")
+            this%print_option = PRINT_ALL
+        case ("print_selected")
+            this%print_option = PRINT_SELECTED
+        case default
+            write(*,*) "Error: Unknown print option for the q_system ", trim(print_option_ch)
+            stop
+        end select
+
+        if (.not. allocated(print_on)) allocate(print_on(n_systems))
+        print_on = .false.
 
         select case(trim(group_type_str))
         case ("material")
@@ -143,7 +162,7 @@ contains
                     allocate(this%mat_kernel(-n_ker:n_ker, 1, 1))
                 end if
 
-                r_max = dble(n_ker*2+2)
+                r_max = dble(n_ker*2+4)
                 r0    = r_max/2.0d0
                 norm  = M_ZERO
                 do i = -n_ker, n_ker
@@ -164,7 +183,7 @@ contains
                     allocate(this%mat_kernel(-n_ker:n_ker, -n_ker:n_ker, 1))
                 end if
 
-                r_max = dble(n_ker*2+2)
+                r_max = dble(n_ker*2 + 4)
                 r0    = r_max/2.0d0
                 norm  = M_ZERO
 
@@ -194,7 +213,7 @@ contains
                     allocate(this%mat_kernel(-n_ker:n_ker,-n_ker:n_ker,-n_ker:n_ker))
                 end if
 
-                r_max = dble(n_ker*2+2)
+                r_max = dble(n_ker*2+4)
                 r0    = r_max/2.0d0
                 norm  = M_ZERO
 
@@ -244,9 +263,31 @@ contains
 
         this%E_field_list = M_ZERO
 
-        do i = 1, n_systems
-            read (unit=funit,fmt=*, iostat=ierr) mol_id(i), id_file(i), grid_coord(i, :)
-        end do
+        if (this%print_option == PRINT_NONE) then
+            print_on = .false.
+            do i = 1, n_systems
+                read (unit=funit,fmt=*, iostat=ierr) mol_id(i), id_file(i), grid_coord(i, :)
+            end do
+        else if (this%print_option == PRINT_ALL) then
+            print_on = .true.
+            do i = 1, n_systems
+                read (unit=funit,fmt=*, iostat=ierr) mol_id(i), id_file(i), grid_coord(i, :)
+            end do
+        else if (this%print_option == PRINT_SELECTED) then
+            do i = 1, n_systems
+                read (unit=funit,fmt=*, iostat=ierr) mol_id(i), id_file(i), grid_coord(i, :), &
+                                                     print_on_ch
+                if (trim(print_on_ch) == "print_on") then
+                    print_on(i) = .true.
+                else if (trim(print_on_ch) == "print_off") then
+                    print_on(i) = .false.
+                else
+                    write(*,*) "Error: Unknown print option for the q_system ", i
+                    stop
+                end if
+            end do
+        end if
+
 
         grid_coord = grid_coord * nm_to_au
 
@@ -260,11 +301,12 @@ contains
             mpi_cart_comm, grid_Ndims, dr)
         end select
        
-        call this%init_all_q_systems(mol_id, id_file, myrank)
+        call this%init_all_q_systems(mol_id, id_file, myrank, print_on)
        
         if (allocated(mol_id))     deallocate(mol_id)
         if (allocated(id_file))    deallocate(id_file)
         if (allocated(grid_coord)) deallocate(grid_coord)
+        if (allocated(print_on))   deallocate(print_on)
 
         close(funit)
 
@@ -697,12 +739,13 @@ contains
 
 !###################################################################################################
 
-    subroutine init_all_q_systems(this, mol_id, id_file, myrank)
+    subroutine init_all_q_systems(this, mol_id, id_file, myrank, print_on)
         class(TQ_group), intent(inout) :: this
         integer        , intent(in)    :: mol_id(:)
         integer        , intent(in)    :: id_file(:)
         integer        , intent(in)    :: myrank
- 
+        logical        , intent(in)    :: print_on(:)
+
         integer  :: i
         integer  :: n_mol
         integer  :: Nt_steps
@@ -726,14 +769,14 @@ contains
             do i = 1, this%n_systems
                 if (myrank == this%map(i,1)) then
                     n_mol = n_mol + 1
-                    call this%q_sys(n_mol)%init(mol_id(i), id_file(i), dt, Nt_steps, myrank)
+                    call this%q_sys(n_mol)%init(mol_id(i), id_file(i), dt, Nt_steps, myrank, print_on(i))
                 end if
             end do
         else if (this%group_type == Q_SINGLE) then
             do i = 1, this%n_systems
                 if (myrank == this%kernel_map(i,0,0,0,1)) then
                     n_mol = n_mol + 1
-                    call this%q_sys(n_mol)%init(mol_id(i), id_file(i), dt, Nt_steps, myrank)
+                    call this%q_sys(n_mol)%init(mol_id(i), id_file(i), dt, Nt_steps, myrank, print_on(i))
                 end if
             end do
         else

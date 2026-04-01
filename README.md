@@ -53,7 +53,16 @@ Documentation for additional inputs (classical media and quantum systems) will b
 
 ## Output
 
-The variables `mxll_n_detector` and `mxll_dt_det_print` of the `inp` file control how many outputs will be printed and how often. These outputs correspond to the components of the electric and magnetic fields at a point, along a line, on a surface or in an entire volume, depending on the dimensionality of the simulation box. These details have to be included in a file named `detectors.in`, and the number of lines must be equal to `mxll_n_detector`. Each detector will be printed in one or many files in a directory called `detector_xxxxxxx`. The number of the directory is equal to the corresponding line of the detector declared in the file `detectors.in`. For more details about the content of this file, check the subroutine `init_outputs` in `outputs_mod.f90`, and `init_detector` in `detector_mod.f90`.
+The variables `mxll_n_detectors` and `mxll_dt_det_print` in the `inp` file control how many detector outputs will be printed and how often.
+These outputs correspond to components of the electric and magnetic fields at a point, along a line, on a surface, or in an entire volume (depending on the simulation dimensionality).
+
+Detector definitions must be provided in a file named `detectors.in`, with exactly `mxll_n_detectors` lines.
+Each detector output is written in a directory named `output_detector_XXXXXXX` (7-digit numbering), where the directory number matches the corresponding line number in `detectors.in`.
+For more details about the expected `detectors.in` format and the generated files, check `init_detectors_outputs` in `output_mod.f90` and `init_detector` in `detector_mod.f90`.
+
+The variable `mxll_dt_q_print` controls how often information about the quantum systems in `q_groups` is printed.
+This information is stored in directories named `output_q_group_XXXX` (4-digit numbering).
+The basic output file `energy_and_dipole.dat` contains the energy and dipole of each system at each printing step. Depending on the kind of quantum system, additional printing options may be available.
 More detailed information will be provided in the future documentation.
 
 ## Publications

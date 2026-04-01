@@ -175,7 +175,7 @@ subroutine send_E_to_J_ranks(mxll, q_group, move_q_system, myrank)
     if (.not. move_q_system) return
 
 #ifdef USE_MPI
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 #endif
 
     select type(mxll)
@@ -192,7 +192,7 @@ subroutine send_E_to_J_ranks(mxll, q_group, move_q_system, myrank)
     end select
 
 #ifdef USE_MPI
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 #endif
 
 end subroutine send_E_to_J_ranks
@@ -210,7 +210,7 @@ subroutine send_J_to_E_ranks(mxll, q_group, move_q_system, myrank)
     if (.not. move_q_system) return
 
 #ifdef USE_MPI
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 #endif
 
     select type(mxll)
@@ -227,7 +227,7 @@ subroutine send_J_to_E_ranks(mxll, q_group, move_q_system, myrank)
     end select
 
 #ifdef USE_MPI
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 #endif
 
 end subroutine send_J_to_E_ranks

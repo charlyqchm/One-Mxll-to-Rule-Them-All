@@ -38,6 +38,7 @@ module constants_mod
     double precision, parameter :: au_to_nm        = 1.0/nm_to_au
     double precision, parameter :: ev_to_radsec    = 2.0*pi0*2.418d14
     double precision, parameter :: ev_to_au        = 1.0/27.2114
+    double precision, parameter :: au_to_ev        = 27.2114
     double precision, parameter :: Hz_to_ev        = 4.1356691d-15
     double precision, parameter :: Debye_to_Cm     = 3.33564d-30
     double precision, parameter :: Debye_to_au     = 3.0/7.63
@@ -76,7 +77,9 @@ module constants_mod
     integer, public, parameter :: &
     Q_SYS_DFTB    = 1
 
-    integer, public, parameter :: &
+!Detector Printing options. ------------------------------------
+                                                            
+    integer, public, parameter :: &                        
     POINT_DETECTOR  = 1,                &
     LINE_X_DETECTOR   = 2,                &
     LINE_Y_DETECTOR  = 3,                &
@@ -89,9 +92,17 @@ module constants_mod
     integer, public, parameter :: &
     Ex_FIELD = 1,                &
     Ey_FIELD = 2,                &
-    Ez_FIELD = 3,                &
-    Hx_FIELD = 4,                &
-    Hy_FIELD = 5,                &
-    Hz_FIELD = 6
+    Ez_FIELD = 3,                &                        
+    Hx_FIELD = 4,                &                       
+    Hy_FIELD = 5,                &                       
+    Hz_FIELD = 6                                         
+!---------------------------------------------------------
+!q_system printing options. ------------------------------
+                                                            
+    integer, public, parameter :: &                        
+    PRINT_NONE = 0,                &
+    PRINT_ALL  = 1,               &
+    PRINT_SELECTED = 2
+
 
 end module constants_mod

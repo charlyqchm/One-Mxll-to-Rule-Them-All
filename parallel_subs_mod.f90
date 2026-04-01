@@ -228,6 +228,11 @@ subroutine exchange_E_field_between_ranks(mxll)
 
 #ifdef USE_MPI
 
+    integer :: ierr
+    integer :: istatus(MPI_STATUS_SIZE)
+
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+
     select type(mxll)
     class is(TMxll_1D)
 
@@ -243,6 +248,8 @@ subroutine exchange_E_field_between_ranks(mxll)
 
     end select
 
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+
 #else
     return
 #endif
@@ -256,6 +263,11 @@ subroutine exchange_H_field_between_ranks(mxll)
     class(TMxll), intent(inout) :: mxll
 
 #ifdef USE_MPI
+
+    integer :: ierr
+    integer :: istatus(MPI_STATUS_SIZE)
+
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     select type(mxll)
     class is(TMxll_1D)
@@ -271,6 +283,9 @@ subroutine exchange_H_field_between_ranks(mxll)
         call exchange_H_field_3D(mxll)
 
     end select
+
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+
 #else
     return
 #endif
@@ -283,9 +298,13 @@ subroutine expand_E_field_between_ranks(mxll, move_q_system)
     class(TMxll), intent(inout) :: mxll
     logical     , intent(in)    :: move_q_system
 
+#ifdef USE_MPI
+    integer :: ierr
+    integer :: istatus(MPI_STATUS_SIZE)
+
     if (.not. move_q_system) return
 
-#ifdef USE_MPI
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     select type(mxll)
     class is(TMxll_1D)
@@ -301,6 +320,8 @@ subroutine expand_E_field_between_ranks(mxll, move_q_system)
         call expand_E_field_3D(mxll)
     end select
 
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+
 #else
     return
 #endif
@@ -313,10 +334,16 @@ subroutine expand_J_field_between_ranks(mxll, move_q_system)
 
     class(TMxll), intent(inout) :: mxll
     logical     , intent(in)    :: move_q_system
+    
+#ifdef USE_MPI
+
+    integer :: ierr
+    integer :: istatus(MPI_STATUS_SIZE)
 
     if (.not. move_q_system) return
 
-#ifdef USE_MPI
+
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     select type(mxll)
     class is(TMxll_1D)
@@ -331,6 +358,8 @@ subroutine expand_J_field_between_ranks(mxll, move_q_system)
 
         call expand_J_field_3D(mxll)
     end select
+
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
 #else
     return
@@ -348,10 +377,14 @@ subroutine extend_fields_to_detectors(mxll, detectors, n_detectors, t_step, t_de
     integer, intent(in) :: t_step
     integer, intent(in) :: t_det_print
 
-    
 #ifdef USE_MPI
+    integer :: ierr
+    integer :: istatus(MPI_STATUS_SIZE)
+
     if (MOD(t_step, t_det_print) /= 0) return
     
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+
     select type(mxll)
     class is(TMxll_1D)
         return
@@ -360,6 +393,8 @@ subroutine extend_fields_to_detectors(mxll, detectors, n_detectors, t_step, t_de
     class is(TMxll_3D)
         call extend_fields_to_detectors_3D(mxll, detectors, n_detectors)
     end select
+
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
 #else
     return
@@ -384,8 +419,6 @@ subroutine exchange_E_field_3D(mxll)
     nx = mxll%nx
     ny = mxll%ny
     nz = mxll%nz
-
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::!
     !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Expanding arrays of E  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~!
@@ -475,8 +508,6 @@ subroutine exchange_E_field_3D(mxll)
     istatus, &     !<=== istatus
     ierr)                       !<=== error code
 
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
-
 #else
 
     return
@@ -499,8 +530,6 @@ subroutine exchange_E_field_2D(mxll)
 
     nx = mxll%nx
     ny = mxll%ny
-
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::!
     !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Expanding arrays of E  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~!
@@ -572,8 +601,6 @@ subroutine exchange_E_field_2D(mxll)
     
     end if
 
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
-
 #else
 
     return
@@ -598,8 +625,6 @@ subroutine exchange_H_field_3D(mxll)
     nx = mxll%nx
     ny = mxll%ny
     nz = mxll%nz
-
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::!
     !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Expanding arrays of H  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~!
@@ -689,8 +714,6 @@ subroutine exchange_H_field_3D(mxll)
             istatus, &     !<=== istatus
             ierr)                       !<=== error code       
     
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
-
 #else 
     return 
 #endif    
@@ -711,8 +734,6 @@ subroutine exchange_H_field_2D(mxll)
 
     nx = mxll%nx
     ny = mxll%ny
-
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::!
     !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Expanding arrays of H  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~!
@@ -781,8 +802,6 @@ subroutine exchange_H_field_2D(mxll)
                 ierr)                       !<=== error code      
     end if
     
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
-
 #else 
     return 
 #endif    
@@ -803,8 +822,6 @@ subroutine expand_E_field_2D(mxll)
 
     nx = mxll%nx
     ny = mxll%ny
-
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::!
     !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Expanding arrays of E fields ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~!
@@ -842,8 +859,6 @@ subroutine expand_E_field_2D(mxll)
 
     end if
 
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
-
 #else
     return
 #endif   
@@ -862,8 +877,6 @@ subroutine expand_E_field_3D(mxll)
 #ifdef USE_MPI
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
-
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     nx = mxll%nx
     ny = mxll%ny
@@ -911,8 +924,6 @@ subroutine expand_E_field_3D(mxll)
         istatus, &                                       !<=== istatus
         ierr)                                            !<=== error code
 
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
-
 #else
     return
 #endif
@@ -936,8 +947,6 @@ subroutine expand_J_field_2D(mxll)
     ny = mxll%ny
 
 #ifdef USE_MPI
-
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     if (mxll%mode == TEZ_2D_MODE .or. mxll%mode == FULL_2D_MODE) then
     
@@ -999,8 +1008,6 @@ subroutine expand_J_field_2D(mxll)
 
     end if
 
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
-
 #else
     return
 #endif
@@ -1026,8 +1033,6 @@ subroutine expand_J_field_3D(mxll)
     nz = mxll%nz
 
 #ifdef USE_MPI
-
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     call mpi_sendrecv(mxll%Jx_old(1,1:ny,1:nz), &     !<=== sending
         ny*nz, &     !<=== the size
@@ -1113,8 +1118,6 @@ subroutine expand_J_field_3D(mxll)
         istatus, &     !<=== istatus
         ierr)                       !<=== error code
 
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
-
 #else
     return
 #endif
@@ -1153,7 +1156,7 @@ subroutine extend_fields_to_detectors_2D(mxll, detectors, n_detectors)
         end if    
     end do
 
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     if (exchange_Ex) then
         call mpi_sendrecv(mxll%Ex(nx, 1:ny), &  !<=== sending
@@ -1186,8 +1189,6 @@ subroutine extend_fields_to_detectors_2D(mxll, detectors, n_detectors)
         istatus, &                                       !<=== istatus
         ierr)                                            !<=== error code
     end if
-
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
 #else
     return
@@ -1230,7 +1231,7 @@ subroutine extend_fields_to_detectors_3D(mxll, detectors, n_detectors)
         end if    
     end do
 
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
+    ! call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     if (exchange_Ex) then
         call mpi_sendrecv(mxll%Ex(nx, 1:ny, 1:nz), &  !<=== sending
@@ -1279,8 +1280,6 @@ subroutine extend_fields_to_detectors_3D(mxll, detectors, n_detectors)
         istatus, &                                       !<=== istatus
         ierr)                                            !<=== error code
     end if
-
-    call MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
 #else
     return

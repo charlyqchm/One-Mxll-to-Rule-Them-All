@@ -13,6 +13,7 @@ module q_sys_dftb_mod
     type, extends(TQ_sys_base) :: TQ_sys_dftb
 
         character(len=20)    :: temp_file
+        logical              :: print_coordinates
         integer              :: dyn_type
         integer              :: n_atoms
         integer              :: n_at_typ
@@ -50,13 +51,14 @@ module q_sys_dftb_mod
             procedure :: kill => kill_dftb
             procedure :: gs_calculate => gs_calculate_dftb
             procedure :: td_propagate => td_propagate_dftb
+            procedure :: write_output => write_output_dftb
     end type TQ_sys_dftb
 
 contains
 
 !###################################################################################################
 
-subroutine init_dftb(this, id, id_file, dt, t_steps, rank)
+subroutine init_dftb(this, id, id_file, dt, t_steps, rank, print_on)
 
     class(TQ_sys_dftb), intent(inout) :: this
     integer           , intent(in)    :: id
@@ -64,12 +66,13 @@ subroutine init_dftb(this, id, id_file, dt, t_steps, rank)
     integer           , intent(in)    :: t_steps
     integer           , intent(in)    :: rank
     real(dp)          , intent(in)    :: dt
-
+    logical           , intent(in)    :: print_on
 
     character(len=20)  :: file_name = "molecule_"
-    character(len=20)  :: file_exten = ".dat"
+    character(len=20)  :: file_exten = ".in"
     character(len=20)  :: file_number
     character(len=20)  :: input_name
+    character(len=30)  :: print_coord_ch
     character(len=100) :: dyn_type_str
     integer            :: n_atoms
     integer            :: n_at_typ
@@ -89,11 +92,12 @@ subroutine init_dftb(this, id, id_file, dt, t_steps, rank)
     real(dp)          , allocatable :: coor_aux(:,:)
     integer           , allocatable :: atom_type(:)
 
-    this%id      = id
-    this%id_file = id_file
-    this%dt      = dt
-    this%t_steps = t_steps
-    this%rank    = rank
+    this%id       = id
+    this%id_file  = id_file
+    this%dt       = dt
+    this%t_steps  = t_steps
+    this%rank     = rank
+    this%print_on = print_on
 
     this%std_unit = this%std_unit + this%rank
 
@@ -111,7 +115,27 @@ subroutine init_dftb(this, id, id_file, dt, t_steps, rank)
     end if
 
     read (unit=funit, fmt=*, iostat=ierr) n_atoms, n_at_typ
-    read (unit=funit, fmt=*, iostat=ierr) dyn_type_str, euler_steps
+    read (unit=funit, fmt=*, iostat=ierr) dyn_type_str, print_coord_ch, euler_steps
+    
+    this%print_coordinates = .false.
+
+    if (this%print_on) then
+        
+        if (ierr /= 0) then
+            write(*,*) "Error: Could not read dynamics type, euler steps and"
+            write(*,*) "print coordinates flag from file ", trim(input_name)
+            stop
+        end if
+
+        if (print_coord_ch == "print_coordinates_on") then
+            this%print_coordinates = .true.
+        else if (print_coord_ch == "print_coordinates_off") then
+            this%print_coordinates = .false.
+        else
+            write(*,*) "Error: Unknown print coordinates flag ", trim(print_coord_ch)
+            stop
+        end if
+    end if
 
     this%n_atoms = n_atoms
     this%n_at_typ = n_at_typ
@@ -120,6 +144,11 @@ subroutine init_dftb(this, id, id_file, dt, t_steps, rank)
     select case (trim(dyn_type_str))
     case ('electrons')
         this%dyn_type = DFTB_ELEC_DYN
+        if (this%print_coordinates) then
+            write(*,*) "Warning: print_coordinates flag is on, "
+            write(*,*) "but it will be ignored for electron dynamics."
+            this%print_coordinates = .false.
+        end if
     case ('ehrenfest')
         this%dyn_type = DFTB_EHREN_DYN
     case ('born-oppenheimer')
@@ -402,6 +431,54 @@ subroutine td_propagate_dftb(this, tq_step, E_field)
     if (allocated(dip_aux))        deallocate(dip_aux)
 
 end subroutine td_propagate_dftb
+
+!###################################################################################################
+
+subroutine write_output_dftb(this, time, i_group, print_q_step)
+
+    class(TQ_sys_dftb), intent(in) :: this
+    real(dp), intent(in) :: time
+    integer, intent(in) :: i_group
+    integer, intent(in) :: print_q_step
+
+    character(len=20) :: dirname = "./output_q_group_"
+    character(len=4)  :: group_number
+    character(len=20) :: mol_number
+    character(len=20) :: file_name = "molecule_"
+    character(len=99) :: full_dirname
+    integer :: i
+    integer :: n
+    integer :: ierr
+    integer :: funit
+
+    if (this%print_on .and. this%print_coordinates) then
+
+        write(group_number,'(I4.4)') i_group
+        write(mol_number,'(I7.7)') this%id
+
+        full_dirname = trim(dirname)//trim(group_number)//"/"//trim(file_name)//trim(mol_number)//".xyz"
+
+        if (print_q_step == 0) then
+            open(newunit=funit, file=full_dirname, status='replace', action="write", iostat=ierr)
+        else 
+            open(newunit=funit, file=full_dirname, status='old', position='append', action="write", iostat=ierr)
+        end if
+
+        write(funit, *) this%n_atoms
+        write(funit, '("# Time = ", ES18.8, " (a.u.)")') time   
+
+        do i = 1, this%n_atoms
+            write(funit, *) this%atom_names(i), &
+                            this%coor(1,i)/AA__Bohr, &
+                            this%coor(2,i)/AA__Bohr, &
+                            this%coor(3,i)/AA__Bohr
+        end do
+
+        close(funit)
+
+    end if
+
+end subroutine write_output_dftb
 
 !###################################################################################################
 end module q_sys_dftb_mod

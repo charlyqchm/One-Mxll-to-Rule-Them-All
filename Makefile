@@ -26,6 +26,7 @@ SRC+=q_sys_dftb_mod.f90
 SRC+=factory_mod.f90
 SRC+=q_group_mod.f90
 SRC+=parallel_subs_mod.f90
+SRC+=write_fields_subs_mod.f90
 SRC+=output_mod.f90
 SRC+=interactions_mod.f90
 MAIN=mxim_mxll.f90
@@ -39,7 +40,7 @@ EXC=OMxRTA.e
 
 
 $(EXC): $(OBJ)
-			$(FC) -o $@ $^ ${FFLAGS} -L$(LIB_DIR) $(LIBS)
+			$(FC) -o $@ $^ ${FFLAGS} -L$(LIB_DIR) $(LIBS) 
 
 .PHONY: mpi
 mpi:
