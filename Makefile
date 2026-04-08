@@ -12,35 +12,52 @@ LIBS=-ldftbplus -lblas -llapack
 INCLUDE_DIR=$(DFTB_INSTALL)/include/dftbplus/modfiles
 LIB_DIR=$(DFTB_INSTALL)/lib
 
-SRC:=constants_mod.f90
-SRC+=input_mod.f90
-SRC+=detector_mod.f90
-SRC+=source_mod.f90
-SRC+=classical_medium_mod.f90
-SRC+=mxll_base_mod.f90
-SRC+=mxll_1D_mod.f90
-SRC+=mxll_2D_mod.f90
-SRC+=mxll_3D_mod.f90
-SRC+=q_sys_base_mod.f90
-SRC+=q_sys_dftb_mod.f90
-SRC+=factory_mod.f90
-SRC+=q_group_mod.f90
-SRC+=parallel_subs_mod.f90
-SRC+=write_fields_subs_mod.f90
-SRC+=output_mod.f90
-SRC+=interactions_mod.f90
-MAIN=mxim_mxll.f90
-MOD=${SRC:.f90=.mod}
-OBJ=${SRC:.f90=.o}
-OBJ+=mxim_mxll.o
-EXC=OMxRTA.e
+SRC_DIR ?= src
+BUILD ?= build
+BUILD_DIR ?= $(BUILD)
+OBJ_DIR ?= $(BUILD_DIR)/obj
+MOD_DIR ?= $(BUILD_DIR)/mod
+BIN_DIR ?= $(BUILD_DIR)/bin
 
-%.o: %.f90
-	$(FC) $(FFLAGS) -o $@ -c $< -I$(INCLUDE_DIR)
+SRC_FILES:=constants_mod.f90
+SRC_FILES+=input_mod.f90
+SRC_FILES+=detector_mod.f90
+SRC_FILES+=source_mod.f90
+SRC_FILES+=classical_medium_mod.f90
+SRC_FILES+=mxll_base_mod.f90
+SRC_FILES+=mxll_1D_mod.f90
+SRC_FILES+=mxll_2D_mod.f90
+SRC_FILES+=mxll_3D_mod.f90
+SRC_FILES+=q_sys_base_mod.f90
+SRC_FILES+=q_sys_dftb_mod.f90
+SRC_FILES+=factory_mod.f90
+SRC_FILES+=q_group_mod.f90
+SRC_FILES+=parallel_subs_mod.f90
+SRC_FILES+=write_fields_subs_mod.f90
+SRC_FILES+=output_mod.f90
+SRC_FILES+=interactions_mod.f90
+MAIN_FILE:=mxim_mxll.f90
+
+SRC := $(addprefix $(SRC_DIR)/,$(SRC_FILES))
+MAIN := $(SRC_DIR)/$(MAIN_FILE)
+
+OBJ := $(addprefix $(OBJ_DIR)/,$(SRC_FILES:.f90=.o))
+OBJ += $(OBJ_DIR)/$(MAIN_FILE:.f90=.o)
+
+EXE_NAME ?= OMxRTA.e
+EXC := $(BIN_DIR)/$(EXE_NAME)
+
+all: $(EXC)
+
+$(OBJ_DIR) $(MOD_DIR) $(BIN_DIR):
+	mkdir -p $@
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.f90 | $(OBJ_DIR) $(MOD_DIR)
+	$(FC) $(FFLAGS) -o $@ -c $< -I$(INCLUDE_DIR) -I$(MOD_DIR) -J$(MOD_DIR)
 
 
-$(EXC): $(OBJ)
-			$(FC) -o $@ $^ ${FFLAGS} -L$(LIB_DIR) $(LIBS) 
+$(EXC): $(OBJ) | $(BIN_DIR)
+	$(FC) -o $@ $^ $(FFLAGS) -L$(LIB_DIR) $(LIBS)
 
 .PHONY: mpi
 mpi:
@@ -54,4 +71,4 @@ mpi_debug:
 
 .PHONY: clean
 clean:
-	      rm $(OBJ) *.mod $(EXC)
+	rm -rf $(BUILD_DIR)
