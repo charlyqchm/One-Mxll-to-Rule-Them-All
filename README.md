@@ -44,11 +44,12 @@ To build the MPI-enabled version:
 ```bash
 make mpi
 ```
+This, by default, creates the `build` folder, where modules, objects, and the executable are saved. The executable will be stored as `build/bin/OMxRTA.e`
 
 ## Running the code
 
-Compilation produces the executable `OMxRTA.e`. Run it from the directory where you want to execute the simulation.
-That directory must contain an input file named `inp`; the available input variables are documented in `input_mod.f90`.
+Run `OMxRTA.e` from the directory where you want to execute the simulation.
+That directory must contain an input file named `inp`; the available input variables are documented in `src/input_mod.f90`.
 Documentation for additional inputs (classical media and quantum systems) will be added in future updates.
 
 ## Output
@@ -58,7 +59,7 @@ These outputs correspond to components of the electric and magnetic fields at a 
 
 Detector definitions must be provided in a file named `detectors.in`, with exactly `mxll_n_detectors` lines.
 Each detector output is written in a directory named `output_detector_XXXXXXX` (7-digit numbering), where the directory number matches the corresponding line number in `detectors.in`.
-For more details about the expected `detectors.in` format and the generated files, check `init_detectors_outputs` in `output_mod.f90` and `init_detector` in `detector_mod.f90`.
+For more details about the expected `detectors.in` format and the generated files, check `init_detectors_outputs` in `src/output_mod.f90` and `init_detector` in `src/detector_mod.f90`.
 
 The variable `mxll_dt_q_print` controls how often information about the quantum systems in `q_groups` is printed.
 This information is stored in directories named `output_q_group_XXXX` (4-digit numbering).
