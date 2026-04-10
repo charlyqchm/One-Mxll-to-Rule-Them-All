@@ -12,7 +12,7 @@ LIBS=-ldftbplus -lblas -llapack
 INCLUDE_DIR=$(DFTB_INSTALL)/include/dftbplus/modfiles
 LIB_DIR=$(DFTB_INSTALL)/lib
 
-SRC_DIR ?= src
+SRC_DIR ?= src/FDTD
 BUILD ?= build
 BUILD_DIR ?= $(BUILD)
 OBJ_DIR ?= $(BUILD_DIR)/obj
