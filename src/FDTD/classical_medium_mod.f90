@@ -211,7 +211,7 @@ contains
         real(dp), intent(out) :: eps_x(nz)
         real(dp), intent(in)  :: dt
         character(len=20) :: file_name = "medium_"
-        character(len=20) :: file_exten = ".dat"
+        character(len=20) :: file_exten = ".in"
         character(len=20) :: file_number
         character(len=20) :: input_name
         character(len=20) :: medium_type_ch
@@ -562,7 +562,7 @@ subroutine read_init_media_2D(media, n_media, eps_x, eps_y, eps_z, grid_Ndims, d
         real(dp), intent(out) :: eps_z(nx, ny, nz)
         
         character(len=20) :: file_name = "medium_"
-        character(len=20) :: file_exten = ".dat"
+        character(len=20) :: file_exten = ".in"
         character(len=20) :: file_number
         character(len=20) :: input_name
         character(len=20) :: medium_type_ch
