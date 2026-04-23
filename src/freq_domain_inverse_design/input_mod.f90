@@ -62,11 +62,11 @@ module input_mod
 
     !Maximum number of iteration steps for the BiCGSTAB_L solver 
     !used in the optimization.
-    integer           :: design_bicgstab_n_max = 1000
+    integer           :: design_bicgstab_max_iter = 1000
 
     !Number of L parameter of the BiCGSTAB_L solver.
     !L=1 corresponds to the standard BiCGSTAB solver.
-    integer           :: design_bicgstab_l = 5
+    integer           :: design_bicgstab_l_term = 5
 
     !Tolerance for the BiCGSTAB_L solver used in the optimization.
     real(dp)          :: design_bicgstab_tol = 1.0d-6
@@ -82,7 +82,8 @@ contains
 subroutine read_input_file(boundaries, restart, converge_optimization, n_opt_problems,        &
                            max_iter_steps, dimensions, n_pml, grid_Ndims, dr, freq_list,      &
                            eps_Re, eps_Im, delta_rho, beta, eta, rho_init, sigma_rho, mpi_dims, &
-                           n_delta_rho_steps, n_beta_steps, bicgstab_n_max, bicgstab_l, bicgstab_tol)
+                           n_delta_rho_steps, n_beta_steps, bicgstab_max_iter, bicgstab_l_term, &
+                           bicgstab_tol)
     
     integer   , intent(out) :: boundaries(3)
     logical   , intent(out) :: restart
@@ -105,8 +106,8 @@ subroutine read_input_file(boundaries, restart, converge_optimization, n_opt_pro
     integer   , intent(out) :: mpi_dims(3)
     integer   , intent(out) :: n_delta_rho_steps
     integer   , intent(out) :: n_beta_steps
-    integer   , intent(out) :: bicgstab_n_max
-    integer   , intent(out) :: bicgstab_l
+    integer   , intent(out) :: bicgstab_max_iter
+    integer   , intent(out) :: bicgstab_l_term
 
 
     integer :: ierr, funit
@@ -115,8 +116,8 @@ subroutine read_input_file(boundaries, restart, converge_optimization, n_opt_pro
     namelist /OMxRTA/ mxll_boundaries, mxll_dimensions, mxll_n_pml, mxll_box_size, mxll_dr, mxll_freq_list, &
                          mxll_eps_Re, mxll_eps_Im, design_n_opt_problems, design_max_iter_steps, &
                          design_converge_optimization, design_restart, design_delta_rho, design_beta, &
-                         design_eta, design_rho_init, design_sigma_rho, design_bicgstab_n_max,        &
-                         design_bicgstab_l, design_bicgstab_tol, mpi_procs_per_axis
+                         design_eta, design_rho_init, design_sigma_rho, design_bicgstab_max_iter,        &
+                         design_bicgstab_l_term, design_bicgstab_tol, mpi_procs_per_axis
 
     ! Check whether file exists.
     inquire (file="inp", iostat=ierr)
@@ -171,8 +172,8 @@ subroutine read_input_file(boundaries, restart, converge_optimization, n_opt_pro
     eta                   = design_eta
     rho_init              = design_rho_init
     sigma_rho             = design_sigma_rho
-    bicgstab_n_max        = design_bicgstab_n_max
-    bicgstab_l            = design_bicgstab_l
+    bicgstab_max_iter     = design_bicgstab_max_iter
+    bicgstab_L_term       = design_bicgstab_l_term
     bicgstab_tol          = design_bicgstab_tol
 
     do i = 1, 3

@@ -30,7 +30,7 @@ program ch_inv_design
     integer         :: dimensions
     integer         :: npml
     integer         :: bicgstab_n_max
-    integer         :: bicgstab_L
+    integer         :: bicgstab_L_term
     integer         :: iter_step
     integer         :: n_beta_steps
     integer         :: n_delta_rho_steps
@@ -51,7 +51,8 @@ program ch_inv_design
     call read_input_file(boundaries, restart, converge_optimization, n_opt_problems,        &
                          max_iter_steps, dimensions, n_pml, grid_Ndims, dr, freq_list,      &
                          eps_Re, eps_Im, delta_rho, beta, eta, rho_init, sigma_rho, mpi_dims, &
-                         n_delta_rho_steps, n_beta_steps, bicgstab_n_max, bicgstab_L, bicgstab_tol)
+                         n_delta_rho_steps, n_beta_steps, bicgstab_n_max, bicgstab_L_term,    &
+                         bicgstab_tol)
 
     mpi_nprocs = mpi_dims(1) * mpi_dims(2) * mpi_dims(3)
 
@@ -69,21 +70,23 @@ program ch_inv_design
     call design%init_design(dimensions, dr, sigma_rho, grid_Ndims)
 
     do i = 1, n_opt_problems
-        call design%collect_opt_regions(opt_problems(i)%opt_region, i, rho_init)
+        call design%collect_opt_regions(opt_problems(i)%opt_region, rho_init, i, n_opt_problems)
     end do
 
-    call init_BICGStab_L_variables(grid_Ndims, dr, dimensions, bicgstab_L)
+    call init_BICGStab_L_variables(grid_Ndims, dr, dimensions, bicgstab_L_term)
 
     !The initial fields are calculated using only the input permittivity.
     !rho_init is ignored in this step if restart is false.
 
     do p = 1, n_opt_problems
 
-        call opt_problems(p)%solve_forward(bicgstab_tol, bicgstab_iter, M_0, -1, converged_forward)
+        call opt_problems(p)%solve_forward(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
+                                           M_0, -1, converged_forward)
 
         call opt_problems(p)%update_targets()
 
-        call opt_problems(p)%solve_adjoint(bicgstab_tol, bicgstab_iter, M_0, -1, converged_adjoint)
+        call opt_problems(p)%solve_adjoint(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
+                                           M_0, -1, converged_adjoint)
         
         call opt_problems(p)%update_fields()
 
@@ -95,11 +98,13 @@ program ch_inv_design
     
     do p = 1, n_opt_problems
 
-        call opt_problems(p)%solve_forward(bicgstab_tol, bicgstab_iter, M_0, 0)
+        call opt_problems(p)%solve_forward(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
+                                           M_0, 0, converged_forward)
 
         call opt_problems(p)%update_targets()
 
-        call opt_problems(p)%solve_adjoint(bicgstab_tol, bicgstab_iter, M_0, 0)
+        call opt_problems(p)%solve_adjoint(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
+                                           M_0, 0, converged_adjoint)
 
         call opt_problems(p)%update_fields()
 
@@ -137,8 +142,8 @@ program ch_inv_design
                 
                 call opt_problems(p)%update_permittivity(design%rho_conv)
 
-                call opt_problems(p)%solve_forward(bicgstab_tol, bicgstab_iter, delta_rho(j), &
-                                                   iter_step, converged_forward)
+                call opt_problems(p)%solve_forward(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
+                                                   delta_rho(j), iter_step, converged_forward)
                 
                 call opt_problems(p)%update_targets()
 
@@ -181,7 +186,8 @@ program ch_inv_design
 
                         call opt_problems(p)%update_permittivity(design%rho_conv)
 
-                        call opt_problems(p)%solve_forward(bicgstab_tol, bicgstab_iter, M_0, &
+                        call opt_problems(p)%solve_forward(bicgstab_tol, bicgstab_max_iter, &
+                                                           bicgstab_L_term, delta_rho(j),   &
                                                            iter_step, converged_forward)
                     
                         call opt_problems(p)%update_targets()
@@ -196,8 +202,8 @@ program ch_inv_design
 
         do p = 1, n_opt_problems
 
-            call opt_problems(p)%solve_adjoint(bicgstab_tol, bicgstab_iter, M_0, iter_step, &
-                                               converged_adjoint)
+            call opt_problems(p)%solve_adjoint(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
+                                               M_0, iter_step, converged_adjoint)
 
             call opt_problems(p)%collect_FOM(opt_problems(p)%w_total, p, n_opt_problems)
 

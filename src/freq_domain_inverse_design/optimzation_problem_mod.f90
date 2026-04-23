@@ -199,24 +199,25 @@ end subroutine kill_optprblm
 
 !###################################################################################################
 
-subroutine solve_forward(this, bicgstab_tol, bicgstab_max_iter, &
+subroutine solve_forward(this, bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
                          delta_p, opt_step, converged)
 
     class(TOptPrblm) , intent(inout) :: this
     integer          , intent(in)    :: bicgstab_max_iter
+    integer          , intent(in)    :: bicgstab_L_term
     logical          , intent(out)   :: converged
     real(dp)         , intent(in)    :: bicgstab_tol
     real(dp)         , intent(in)    :: opt_step
     real(dp)         , intent(in)    :: delta_p
     
     logical    :: transpose
-    real*8     :: bicgstab_error
+    real(dp)   :: bicgstab_error
 
     transpose = .false.
 
     call BICGStab_L(this%A_op, this%f_vec, this%j_src, this%f_vec_new, this%Af_vec, &
-                    bicgstab_tol, bicgstab_max_iter, this%eps_r, &
-                    converged, transpose, bicgstab_error)
+                    this%eps_r, converged, transpose, bicgstab_tol, bicgstab_max_iter, &
+                    bicgstab_L_term, bicgstab_error)
 
     if (.not. converged) then
         write(*, *) "Warning, bicgstab-L has not converged F vector"
@@ -228,11 +229,12 @@ end subroutine solve_forward
 
 !###################################################################################################
 
-subroutine solve_adjoint(this, bicgstab_tol, bicgstab_max_iter, &
+subroutine solve_adjoint(this, bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
                          delta_p, opt_step, converged)
 
     class(TOptPrblm) , intent(inout) :: this
     integer          , intent(in)    :: bicgstab_max_iter
+    integer          , intent(in)    :: bicgstab_L_term
     logical          , intent(out)   :: converged
     real(dp)         , intent(in)    :: bicgstab_tol
     real(dp)         , intent(in)    :: opt_step
@@ -240,16 +242,16 @@ subroutine solve_adjoint(this, bicgstab_tol, bicgstab_max_iter, &
     
     integer    :: n
     logical    :: transpose
-    real*8     :: bicgstab_error
+    real(dp)   :: bicgstab_error
 
     transpose = .true.
 
     do n = 1, this%n_src_trg
         if (this%src_trg(n)%is_target) then
 
-            call BICGStab_L(this%A_op, this%f_adj_vec(n), this%j_trg, this%f_adj_vec_new(n), this%Af_vec, &
-            bicgstab_tol, bicgstab_max_iter, this%eps_r, converged, transpose, &
-            bicgstab_error)
+            call BICGStab_L(this%A_op, this%f_adj_vec(n), this%j_trg, this%f_adj_vec_new(n), &
+                            this%Af_vec, this%eps_r, converged, transpose, bicgstab_tol,     &
+                            bicgstab_max_iter, bicgstab_L_term, bicgstab_error)
 
             if (.not. converged) then
                 write(*, *) "Warning, bicgstab-L has not converged adjoint F vector"

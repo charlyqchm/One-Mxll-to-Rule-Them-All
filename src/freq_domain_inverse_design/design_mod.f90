@@ -1,11 +1,9 @@
 module design_mod
 
-#ifdef USE_MPI
-    use mpi
-#endif
     use constants_mod
     use medium_mod
-    use allocator_multimode_mod
+    use allocator_multidim_mod
+    use parallel_subs_mod
 
     implicit none
 
@@ -120,11 +118,13 @@ end subroutine kill_design
 
 !###################################################################################################
 
-subroutine collect_opt_regions(this, opt_region_i, rho_init)
+subroutine collect_opt_regions(this, opt_region_i, rho_init, p_id, p_tot)
 
     class(TDesign) :: this
     logical        :: opt_region_i(:,:,:)
     real(dp)       :: rho_init
+    integer        :: p_id
+    integer        :: p_tot
 
     integer :: i, j, k
 
@@ -155,9 +155,15 @@ subroutine collect_opt_regions(this, opt_region_i, rho_init)
         end do
         end do
         end do
-    end select
+    end select 
 
-    !expand rho to ranks    
+    if (p_id == p_tot) then
+        call extend_array_to_ranks(this%rho, this%dimensions, this%nx, this%ny, this%nz, this%n_ker)
+        call extend_array_to_ranks(this%opt_region, this%dimensions, this%nx, this%ny, this%nz, &
+                                   this%n_ker)
+    end if
+
+
 
 end subroutine collect_opt_regions
 
@@ -208,7 +214,8 @@ subroutine collect_gradients(this, grad_in, p, n_opt_problems)
     if (p == n_opt_problems) then
         this%grad = 2.0_dp* this%fom *this%grad
 
-!Expand grad to ranks
+        call extend_array_to_ranks(this%grad, this%dimensions, this%nx, this%ny, this%nz, &
+                                   this%n_ker)
 
     end if
 
@@ -377,7 +384,7 @@ subroutine displace_rho(this)
             this%grad_new(1:this%nx,1:this%ny,1:this%nz) * this%drho / norm_global
     end select
 
-!Extend rho to ranks
+    call extend_array_to_ranks(this%rho, this%dimensions, this%nx, this%ny, this%nz, this%n_ker)
 
 end subroutine displace_rho
 
@@ -396,7 +403,7 @@ subroutine reset_rho_one_step_back(this)
         this%rho(1:this%nx,1:this%ny,1:this%nz) = this%rho_old(1:this%nx,1:this%ny,1:this%nz)
     end select
 
-!Extend rho to ranks
+    call extend_array_to_ranks(this%rho, this%dimensions, this%nx, this%ny, this%nz, this%n_ker)
 
 end subroutine reset_rho_one_step_back
 
@@ -415,6 +422,8 @@ subroutine reset_grad(this)
         this%grad(1:this%nx,1:this%ny,1:this%nz) = R_0
     end select
 
+    call extend_array_to_ranks(this%grad, this%dimensions, this%nx, this%ny, this%nz, this%n_ker)
+
 end subroutine reset_grad
 
 !###################################################################################################
@@ -431,8 +440,6 @@ subroutine update_rho(this)
     case (3)
         this%rho_old(1:this%nx,1:this%ny,1:this%nz) = this%rho(1:this%nx,1:this%ny,1:this%nz)
     end select
-
-!Extend rho_old to ranks
 
 end subroutine update_rho
 

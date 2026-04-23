@@ -1,4 +1,4 @@
-module allocator_multimode_mod
+module allocator_multidim_mod
  
      use constants_mod
      use rs_vec_base_mod
@@ -202,4 +202,4 @@ end subroutine allocate_multidim_L
 
 !###################################################################################################
 
-end module allocator_multimode_mod
+end module allocator_multidim_mod
