@@ -92,9 +92,9 @@ subroutine init_design(this, dimensions, dr, sigma, grid_Ndims)
     call allocate_multidim(array=this%ker_mat, dim=dimensions, i_max=this%n_ker, i_min=-this%n_ker, &
                            j_max=this%n_ker, j_min=-this%n_ker, k_max=this%n_ker, k_min=-this%n_ker)
 
-    this%rho        = R_0
-    this%rho_conv   = R_0
-    this%rho_old    = R_0
+    this%rho        = 0.0_dp
+    this%rho_conv   = 0.0_dp
+    this%rho_old    = 0.0_dp
     this%opt_region = .false.
 
 end subroutine init_design
@@ -132,13 +132,14 @@ subroutine collect_opt_regions(this, opt_region_i, rho_init, p_id, p_tot)
 
     select case (this%dimensions)
     case (1)
-        this%opt_region(1:this%nx,1,1) = this%opt_region(1:this%nx,1,1) .or. opt_region_i
+        this%opt_region(1:this%nx,1,1) = this%opt_region(1:this%nx,1,1) .or. &
+                                         opt_region_i(1:this%nx,1,1)
         do i = 1, this%nx
             if (this%opt_region(i,1,1)) this%rho(i,1,1) = rho_init
         end do
     case (2)
         this%opt_region(1:this%nx, 1:this%ny, 1) = this%opt_region(1:this%nx, 1:this%ny, 1) .or. &
-                                                   opt_region_i
+                                                   opt_region_i(1:this%nx, 1:this%ny, 1)
         do j = 1, this%ny
         do i = 1, this%nx
             if (this%opt_region(i,j,1)) this%rho(i,j,1) = rho_init
@@ -146,7 +147,8 @@ subroutine collect_opt_regions(this, opt_region_i, rho_init, p_id, p_tot)
         end do
     case (3)
         this%opt_region(1:this%nx, 1:this%ny, 1:this%nz) = &
-            this%opt_region(1:this%nx, 1:this%ny, 1:this%nz) .or. opt_region_i
+            this%opt_region(1:this%nx, 1:this%ny, 1:this%nz) .or. &
+            opt_region_i(1:this%nx, 1:this%ny, 1:this%nz)
     
         do k = 1, this%nz
         do j = 1, this%ny
@@ -176,13 +178,13 @@ subroutine collect_FOM(this, w_p, p, n_opt_problems)
     integer         :: p
     integer         :: n_opt_problems
 
-    real(dp) :: fom_loc = R_0
-    real(dp) :: fom_sum = R_0
+    real(dp) :: fom_loc = 0.0_dp
+    real(dp) :: fom_sum = 0.0_dp
 #ifdef USE_MPI
     integer :: ierr
 #endif
 
-    if (p == 1) this%fom = R_0
+    if (p == 1) this%fom = 0.0_dp
 
     this%fom = this%fom + w_p
 
@@ -207,7 +209,7 @@ subroutine collect_gradients(this, grad_in, p, n_opt_problems)
     integer         :: p
     integer         :: n_opt_problems
 
-    if (p == 1) this%grad = R_0
+    if (p == 1) this%grad = 0.0_dp
 
     this%grad = this%grad + grad_in
 
@@ -229,7 +231,7 @@ subroutine apply_kernel_on_rho(this)
 
     integer :: i, j, k, ii, jj, kk
 
-    this%rho_conv = R_0
+    this%rho_conv = 0.0_dp
 
     select case (this%dimensions)
     case (1)
@@ -283,7 +285,7 @@ subroutine apply_kernel_on_grad(this)
 
     integer :: i, j, k, ii, jj, kk
 
-    this%grad_conv = R_0
+    this%grad_conv = 0.0_dp
 
     select case (this%dimensions)
     case (1)
@@ -415,11 +417,11 @@ subroutine reset_grad(this)
 
     select case (this%dimensions)
     case (1)
-        this%grad(1:this%nx,1,1) = R_0
+        this%grad(1:this%nx,1,1) = 0.0_dp
     case (2)
-        this%grad(1:this%nx,1:this%ny,1) = R_0
+        this%grad(1:this%nx,1:this%ny,1) = 0.0_dp
     case (3)
-        this%grad(1:this%nx,1:this%ny,1:this%nz) = R_0
+        this%grad(1:this%nx,1:this%ny,1:this%nz) = 0.0_dp
     end select
 
     call extend_array_to_ranks(this%grad, this%dimensions, this%nx, this%ny, this%nz, this%n_ker)

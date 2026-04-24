@@ -6,12 +6,13 @@ module bicgstab_mod
     use medium_mod
     use operator_mod
     use allocator_multidim_mod
+    use rs_operations_subs_mod
 
     implicit none
 
-    type(TRSvec), allocatable :: r0_vec
-    type(TRSvec), allocatable :: r_vec(:)
-    type(TRSvec), allocatable :: u_vec(:)
+    class(TRSvec), allocatable :: r0_vec
+    class(TRSvec), allocatable :: r_vec(:)
+    class(TRSvec), allocatable :: u_vec(:)
 
     complex(dp) , allocatable :: tau(:,:)
     complex(dp) , allocatable :: gam(:)
@@ -22,9 +23,8 @@ module bicgstab_mod
 contains
 !###################################################################################################
 
-subroutine init_BICGStab_L_variables(grid_Ndims, dr, dimensionsm, L_term)
+subroutine init_BICGStab_L_variables(grid_Ndims, dimensionsm, L_term)
 
-    real(dp), intent(in) :: dr(3)
     integer , intent(in) :: grid_Ndims(3)
     integer , intent(in) :: dimensionsm
     integer , intent(in) :: L_term
@@ -62,18 +62,18 @@ end subroutine kill_BICGStab_L_variables
 subroutine BICGStab_L(A_op, f_vec, j_vec, f_vec_out, Af_vec, eps_r, converged, transpose, &
                       tol, n_max, L_iter, abs_err)
 
-    type(TOperator)    , intent(in)  :: A_op
-    type(TMedium_eps_r), intent(in)  :: eps_r
-    class(TRSvec)      , intent(in)  :: f_vec 
-    class(TRSvec)      , intent(in)  :: j_vec
-    class(TRSvec)      , intent(out) :: f_vec_out
-    class(TRSvec)      , intent(in)  :: Af_vec
-    logical            , intent(out) :: converged
-    logical            , intent(in)  :: transpose
-    real(dp)           , intent(in)  :: tol
-    real(dp)           , intent(out) :: abs_err
-    integer            , intent(in)  :: n_max
-    integer            , intent(in)  :: L_iter
+    type(TOperator)    , intent(inout) :: A_op
+    type(TMedium_eps_r), intent(inout) :: eps_r
+    class(TRSvec)      , intent(inout) :: f_vec 
+    class(TRSvec)      , intent(inout) :: j_vec
+    class(TRSvec)      , intent(inout) :: f_vec_out
+    class(TRSvec)      , intent(inout) :: Af_vec
+    logical            , intent(out)   :: converged
+    logical            , intent(in)    :: transpose
+    real(dp)           , intent(in)    :: tol
+    real(dp)           , intent(out)   :: abs_err
+    integer            , intent(in)    :: n_max
+    integer            , intent(in)    :: L_iter
 
     complex(dp) :: rho_0
     complex(dp) :: rho_1
@@ -89,11 +89,11 @@ subroutine BICGStab_L(A_op, f_vec, j_vec, f_vec_out, Af_vec, eps_r, converged, t
     rho_0 = Z_ONE
     rho_1 = Z_ONE
     alpha = Z_ONE
-    sig   = Z_ZERO
+    sig   = Z_0
 
     call A_op%apply_operator(f_vec, Af_vec, eps_r, transpose)
 
-    call linear_op_V1_V2(j_vec, Af_vec, -Z_ONE, r0_vec)
+    call linear_op_V1_aV2(j_vec, Af_vec, -Z_ONE, r0_vec)
 
     call copy_V2_on_V1(r_vec(0), r0_vec)
 

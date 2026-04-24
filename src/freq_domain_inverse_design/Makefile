@@ -11,7 +11,7 @@ SRC+=medium_mod.f90
 SRC+=target_source_mod.f90
 SRC+=parallel_subs_mod.f90
 SRC+=rs_operations_subs_mod.f90
-SRC+=operators_mod.f90
+SRC+=operator_mod.f90
 SRC+=design_mod.f90
 SRC+=bicgstab_mod.f90
 SRC+=optimization_problem_mod.f90
@@ -24,7 +24,7 @@ EXC=OMxTRA_inv_design.e
 	$(FC) $(FFLAGS) -o $@ -c $<
 
 $(EXC): $(OBJ)
-			$(FC) -o $@ $^ ${FFLAGS}
+	$(FC) -o $@ $^ ${FFLAGS}
 
 .PHONY: clean
 clean:

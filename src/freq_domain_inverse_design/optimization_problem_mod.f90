@@ -66,7 +66,7 @@ contains
 !###################################################################################################
 
 subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, boundaries, restart, &
-                         n_pml, grid_Ndims, mpi_coords, mpi_dims)
+                         n_pml, grid_Ndims, mpi_cart_comm, mpi_coords, mpi_dims)
 
     class(TOptPrblm) , intent(inout) :: this
     logical          , intent(in)    :: restart
@@ -74,6 +74,7 @@ subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, boundari
     integer          , intent(in)    :: id
     integer          , intent(in)    :: boundaries(3)
     integer          , intent(in)    :: grid_Ndims(3)
+    integer          , intent(in)    :: mpi_cart_comm
     integer          , intent(in)    :: mpi_coords(3)
     integer          , intent(in)    :: mpi_dims(3)
     integer          , intent(in)    :: n_pml
@@ -131,7 +132,7 @@ subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, boundari
                            j_max = this%ny, k_max = this%nz)
 
     this%opt_region = .false.
-    this%grad = R_0
+    this%grad = 0.0_dp
     this%dA   = Z_0
     
     call this%eps_r%init_medium(dimensions, grid_Ndims)
@@ -141,7 +142,7 @@ subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, boundari
     call clean_opt_region(this)
 
     call read_init_src_trg(this%src_trg, this%n_src_trg, this%n_src, this%n_trg, dimensions, id, dr, &
-                           grid_Ndims, mpi_coords, mpi_dims)
+                           grid_Ndims, mpi_cart_comm, mpi_coords, mpi_dims)
 
     do i = 1, this%n_src_trg
         call set_source_J(this%src_trg(i), this%j_trg)
@@ -182,7 +183,7 @@ subroutine kill_optprblm(this)
     call this%eps_r%kill_medium()
 
     do i = 1, this%n_src_trg
-        call this%src_trg(i)%kill_srctrg()
+        call this%src_trg(i)%kill_src_trg()
     end do
 
     if (allocated(this%src_trg)) deallocate(this%src_trg)
@@ -207,7 +208,7 @@ subroutine solve_forward(this, bicgstab_tol, bicgstab_max_iter, bicgstab_L_term,
     integer          , intent(in)    :: bicgstab_L_term
     logical          , intent(out)   :: converged
     real(dp)         , intent(in)    :: bicgstab_tol
-    real(dp)         , intent(in)    :: opt_step
+    integer          , intent(in)    :: opt_step
     real(dp)         , intent(in)    :: delta_p
     
     logical    :: transpose
@@ -237,7 +238,7 @@ subroutine solve_adjoint(this, bicgstab_tol, bicgstab_max_iter, bicgstab_L_term,
     integer          , intent(in)    :: bicgstab_L_term
     logical          , intent(out)   :: converged
     real(dp)         , intent(in)    :: bicgstab_tol
-    real(dp)         , intent(in)    :: opt_step
+    integer          , intent(in)    :: opt_step
     real(dp)         , intent(in)    :: delta_p
     
     integer    :: n
@@ -247,7 +248,9 @@ subroutine solve_adjoint(this, bicgstab_tol, bicgstab_max_iter, bicgstab_L_term,
     transpose = .true.
 
     do n = 1, this%n_src_trg
-        if (this%src_trg(n)%is_target) then
+        if (this%src_trg(n)%is_a_target) then
+
+            call set_jtrg(this%src_trg(n), this%j_trg)
 
             call BICGStab_L(this%A_op, this%f_adj_vec(n), this%j_trg, this%f_adj_vec_new(n), &
                             this%Af_vec, this%eps_r, converged, transpose, bicgstab_tol,     &
@@ -674,7 +677,7 @@ subroutine update_targets(this)
     this%w_total = 0.0d0
 
     do n = 1, this%n_src_trg
-        call update_target(this%src_trg(n), this%f_vec_new, this%j_trg, this%w_dL(n), this%w_total)
+        call update_target(this%src_trg(n), this%f_vec_new, this%w_dL(n), this%w_total)
     end do
 
 end subroutine update_targets

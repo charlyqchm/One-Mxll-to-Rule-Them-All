@@ -63,13 +63,15 @@ module parallel_subs_mod
 
 contains
 !###################################################################################################
-subroutine init_parallelization(dimensions, mpi_coords, mpi_dims, mpi_nprocs, boundaries, myrank)
+subroutine init_parallelization(dimensions, mpi_coords, mpi_dims, mpi_nprocs, mpi_cart_comm, &
+                                boundaries, myrank)
         integer, intent(in)    :: dimensions
         integer, intent(in)    :: mpi_nprocs
         integer, intent(in)    :: boundaries(3)   
         integer, intent(inout) :: myrank
         integer, intent(inout) :: mpi_dims(3)
         integer, intent(inout) :: mpi_coords(3)
+        integer, intent(inout) :: mpi_cart_comm
 
         integer :: i
         integer :: coords_aux(dimensions)
@@ -223,6 +225,8 @@ subroutine init_parallelization(dimensions, mpi_coords, mpi_dims, mpi_nprocs, bo
             end if
 
         end if
+
+        mpi_cart_comm = cartesian_comm
 
 #else
         return

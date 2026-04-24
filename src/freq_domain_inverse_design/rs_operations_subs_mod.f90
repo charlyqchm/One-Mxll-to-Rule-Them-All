@@ -126,7 +126,7 @@ end subroutine self_linear_op_V1_aV2
 
 !###################################################################################################
 
-subroutine self_linear_op_aV1_V2(vec1, a, vec2)
+subroutine self_linear_op_aV1_V2(vec1, vec2, a)
 
     class(TRSvec), intent(inout) :: vec1
     class(TRSvec), intent(in)    :: vec2

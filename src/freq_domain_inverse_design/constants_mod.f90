@@ -19,7 +19,6 @@ module constants_mod
     real(dp)    , parameter :: pi      = 3.141592653589793238462643383279502884197d0
     real(dp)    , parameter :: eps0    = 1.0d0 !0.079577471545947672804111050481878919527
     real(dp)    , parameter :: mu0     = 1.0_dp
-    real(dp)    , parameter :: R_0     = 0.0_dp
     complex(dp) , parameter :: Z_I     = (0.0_dp, 1.0_dp)
     complex(dp) , parameter :: Z_ONE   = (1.0_dp, 0.0_dp)
     complex(dp) , parameter :: Z_0     = (0.0_dp, 0.0_dp)

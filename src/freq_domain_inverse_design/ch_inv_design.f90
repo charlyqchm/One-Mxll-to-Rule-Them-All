@@ -5,10 +5,12 @@ program ch_inv_design
     use optimization_problem_mod
     use design_mod
     use bicgstab_mod
+    use parallel_subs_mod
+    use input_mod
 
     implicit none
 
-    type(TOptPrblm) :: opt_problems(:)
+    type(TOptPrblm), allocatable :: opt_problems(:)
     type(TDesign)   :: design
     
     logical         :: restart
@@ -17,25 +19,26 @@ program ch_inv_design
     logical         :: change_delta_rho
     logical         :: converged_forward
     logical         :: converged_adjoint
-    logical         :: fom, fom_old
-
+    
     integer         :: grid_Ndims(3)
     integer         :: max_iter_steps
     integer         :: n_opt_problems
     integer         :: boundaries(3)
+    integer         :: mpi_cart_comm
     integer         :: mpi_coords(3) = 0
     integer         :: mpi_dims(3)   = 1
     integer         :: myrank        = 0
     integer         :: mpi_nprocs
     integer         :: dimensions
-    integer         :: npml
-    integer         :: bicgstab_n_max
+    integer         :: n_pml
+    integer         :: bicgstab_max_iter
     integer         :: bicgstab_L_term
     integer         :: iter_step
     integer         :: n_beta_steps
     integer         :: n_delta_rho_steps
     integer         :: i, j, k, p
-
+    
+    real(dp)        :: fom, fom_old
     real(dp)        :: dr
     real(dp)        :: freq_list(100)
     real(dp)        :: eps_Re(100)
@@ -43,7 +46,7 @@ program ch_inv_design
     real(dp)        :: delta_rho(50)
     real(dp)        :: beta(50)
     real(dp)        :: eta
-    real(dp)        :: rho_init(100)
+    real(dp)        :: rho_init
     real(dp)        :: sigma_rho
     real(dp)        :: bicgstab_tol
 
@@ -51,19 +54,20 @@ program ch_inv_design
     call read_input_file(boundaries, restart, converge_optimization, n_opt_problems,        &
                          max_iter_steps, dimensions, n_pml, grid_Ndims, dr, freq_list,      &
                          eps_Re, eps_Im, delta_rho, beta, eta, rho_init, sigma_rho, mpi_dims, &
-                         n_delta_rho_steps, n_beta_steps, bicgstab_n_max, bicgstab_L_term,    &
+                         n_delta_rho_steps, n_beta_steps, bicgstab_max_iter, bicgstab_L_term,    &
                          bicgstab_tol)
 
     mpi_nprocs = mpi_dims(1) * mpi_dims(2) * mpi_dims(3)
 
-    call init_parallelization(dimensions, mpi_coords, mpi_dims, mpi_nprocs, boundaries, myrank)
+    call init_parallelization(dimensions, mpi_coords, mpi_dims, mpi_nprocs, mpi_cart_comm, &
+                              boundaries, myrank)
 
     allocate(opt_problems(n_opt_problems))
 
     do i = 1, n_opt_problems
         call opt_problems(i)%init_optprblm(i, dimensions, dr, freq_list(i), eps_Re(i), &
                                            eps_Im(i), boundaries, restart, n_pml,       &
-                                           grid_Ndims, mpi_coords, mpi_dims)
+                                           grid_Ndims, mpi_cart_comm, mpi_coords, mpi_dims)
         opt_problems(i)%beta_rho = beta(1)
     end do
 
@@ -73,7 +77,7 @@ program ch_inv_design
         call design%collect_opt_regions(opt_problems(i)%opt_region, rho_init, i, n_opt_problems)
     end do
 
-    call init_BICGStab_L_variables(grid_Ndims, dr, dimensions, bicgstab_L_term)
+    call init_BICGStab_L_variables(grid_Ndims, dimensions, bicgstab_L_term)
 
     !The initial fields are calculated using only the input permittivity.
     !rho_init is ignored in this step if restart is false.
@@ -81,12 +85,13 @@ program ch_inv_design
     do p = 1, n_opt_problems
 
         call opt_problems(p)%solve_forward(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
-                                           M_0, -1, converged_forward)
+                                           0.0_dp, -1, converged_forward)
 
         call opt_problems(p)%update_targets()
 
+
         call opt_problems(p)%solve_adjoint(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
-                                           M_0, -1, converged_adjoint)
+                                           0.0_dp, -1, converged_adjoint)
         
         call opt_problems(p)%update_fields()
 
@@ -99,12 +104,12 @@ program ch_inv_design
     do p = 1, n_opt_problems
 
         call opt_problems(p)%solve_forward(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
-                                           M_0, 0, converged_forward)
+                                           0.0_dp, 0, converged_forward)
 
         call opt_problems(p)%update_targets()
 
         call opt_problems(p)%solve_adjoint(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
-                                           M_0, 0, converged_adjoint)
+                                           0.0_dp, 0, converged_adjoint)
 
         call opt_problems(p)%update_fields()
 
@@ -124,7 +129,7 @@ program ch_inv_design
         do p = 1, n_opt_problems
             opt_problems(p)%beta_rho = beta(k)
             call opt_problems(p)%compute_gradient(design%rho_conv)
-            call design%collect_gradients(opt_problems(p)%gradient, &
+            call design%collect_gradients(opt_problems(p)%grad, &
             p, n_opt_problems)
         end do
         call design%apply_kernel_on_grad()
@@ -153,9 +158,9 @@ program ch_inv_design
             fom = design%fom**2
 
             if (converge_optimization) then
-                change_delta_rho = (fom < fom_old) .or. (.not. converge_forward)
+                change_delta_rho = (fom < fom_old) .or. (.not. converged_forward)
             else
-                change_delta_rho = .not. converge_forward
+                    change_delta_rho = .not. converged_forward
             end if
 
             if (change_delta_rho .and. converge_optimization)then
@@ -203,9 +208,9 @@ program ch_inv_design
         do p = 1, n_opt_problems
 
             call opt_problems(p)%solve_adjoint(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
-                                               M_0, iter_step, converged_adjoint)
+                                               0.0_dp, iter_step, converged_adjoint)
 
-            call opt_problems(p)%collect_FOM(opt_problems(p)%w_total, p, n_opt_problems)
+            call design%collect_FOM(opt_problems(p)%w_total, p, n_opt_problems)
 
         end do
 
@@ -234,7 +239,7 @@ program ch_inv_design
         call opt_problems(p)%kill_optprblm()
     end do
 
-    if allocated(opt_problems) deallocate(opt_problems)
+    if (allocated(opt_problems)) deallocate(opt_problems)
 
     call finalize_parallelization()
 

@@ -1,5 +1,9 @@
 module target_source_mod
 
+#ifdef USE_MPI
+    use mpi
+#endif
+
     use constants_mod
     use rs_vec_base_mod
     use rs_vec_dimensions_mod
@@ -17,11 +21,13 @@ module target_source_mod
         real(dp)    :: sigma
         real(dp)    :: r0(3)
         
-        integer,  allocatable :: i_ndx
-        integer,  allocatable :: j_ndx
-        integer,  allocatable :: k_ndx
-        logical,  allocatable :: in_this_rank(:,:,:)
-        real(dp), allocatable :: ker_mat(:,:,:)
+        complex(dp), allocatable :: trg_amp(:,:,:)
+        integer    , allocatable :: i_ndx(:,:,:)
+        integer    , allocatable :: j_ndx(:,:,:)
+        integer    , allocatable :: k_ndx(:,:,:)
+        integer    , allocatable :: rank_id(:,:,:)
+        logical    , allocatable :: in_this_rank(:,:,:)
+        real(dp)   , allocatable :: ker_mat(:,:,:)
 
         contains
 
@@ -33,7 +39,8 @@ module target_source_mod
 contains
 !###################################################################################################
 
-subroutine init_src_trg(this, dim, r0, dr, type_ch, sigma, J_amp, grid_Ndims, mpi_coords, mpi_dims)
+subroutine init_src_trg(this, dim, r0, dr, type_ch, sigma, J_amp, grid_Ndims, &
+                        mpi_cart_comm, mpi_coords, mpi_dims)
 
     class(TSrcTrg)   , intent(inout) :: this
     character(len=10), intent(in)    :: type_ch
@@ -43,12 +50,16 @@ subroutine init_src_trg(this, dim, r0, dr, type_ch, sigma, J_amp, grid_Ndims, mp
     real(dp)         , intent(in)    :: sigma
     integer          , intent(in)    :: dim
     integer          , intent(in)    :: grid_Ndims(3)
+    integer          , intent(in)    :: mpi_cart_comm
     integer          , intent(in)    :: mpi_coords(3)
     integer          , intent(in)    :: mpi_dims(3)
 
     integer  :: i, j, k
     integer  :: i0, j0, k0
+    integer  :: rank_id
     integer  :: rank_x, rank_y, rank_z
+    integer  :: rank_vec(3)
+    integer  :: ierr
     real(dp) :: norm
 
     this%sigma      = sigma
@@ -150,15 +161,22 @@ subroutine init_src_trg(this, dim, r0, dr, type_ch, sigma, J_amp, grid_Ndims, mp
         if (.not.allocated(this%ker_mat))      allocate(this%ker_mat(-this%n_sig:this%n_sig, 1, 1))
         if (.not.allocated(this%in_this_rank)) &
         allocate(this%in_this_rank(-this%n_sig:this%n_sig, 1, 1))
+        if (.not.allocated(this%rank_id))      allocate(this%rank_id(-this%n_sig:this%n_sig, 1, 1))
+        if (.not.allocated(this%trg_amp))      allocate(this%trg_amp(-this%n_sig:this%n_sig, 1, 1))
+        if (.not.allocated(this%i_ndx))        allocate(this%i_ndx(-this%n_sig:this%n_sig, 1, 1))
+
+        this%in_this_rank = .false.
 
         i0 = int(this%r0(1)/dr) + int(grid_Ndims(1)/2)        
         
-        this%i_ndx = i0
-        norm = R_0
+        this%i_ndx = 0
+        norm = 0.0_dp
         do i = -this%n_sig, this%n_sig
             this%ker_mat(i, 1, 1) = exp(-(i*dr)**2/(2*this%sigma**2))
             norm = norm + this%ker_mat(i, 1, 1)
             this%in_this_rank(i, 1, 1) = .true.
+            this%rank_id(i, 1, 1) = 0
+            this%i_ndx(i, 1, 1) = i + i0
         end do
 
         this%ker_mat = this%ker_mat/norm
@@ -168,20 +186,48 @@ subroutine init_src_trg(this, dim, r0, dr, type_ch, sigma, J_amp, grid_Ndims, mp
                                                    -this%n_sig:this%n_sig, 1))
         if (.not.allocated(this%in_this_rank)) &
         allocate(this%in_this_rank(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, 1))
+        if (.not.allocated(this%rank_id)) &
+        allocate(this%rank_id(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, 1))
+        if (.not.allocated(this%trg_amp)) &
+        allocate(this%trg_amp(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, 1))
+        if (.not.allocated(this%i_ndx)) &
+        allocate(this%i_ndx(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, 1))
+        if (.not.allocated(this%j_ndx)) &
+        allocate(this%j_ndx(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, 1))
+
+        this%in_this_rank = .false.
+
+        this%i_ndx = 0
+        this%j_ndx = 0
 
         i0 = int(this%r0(1)/dr) + int(grid_Ndims(1)*mpi_dims(1)/2)
         j0 = int(this%r0(2)/dr) + int(grid_Ndims(2)*mpi_dims(2)/2)
 
-        rank_x = int((i0+1)/grid_Ndims(1))
-        rank_y = int((j0+1)/grid_Ndims(2))
+        do j = -this%n_sig, this%n_sig
+        do i = -this%n_sig, this%n_sig
 
-        if (rank_x == mpi_coords(1) .and. rank_y == mpi_coords(2)) then
-            this%i_ndx = i0 - rank_x*grid_Ndims(1)
-            this%j_ndx = j0 - rank_y*grid_Ndims(2)
-            this%in_this_rank(this%i_ndx, this%j_ndx, 1) = .true.
-        end if
+            rank_x = int((i0+i+1)/grid_Ndims(1))
+            rank_y = int((j0+j+1)/grid_Ndims(2))
 
-        norm = R_0
+            rank_vec = (/rank_x, rank_y, 0/)
+
+#ifdef USE_MPI
+            call MPI_Cart_rank(mpi_cart_comm, rank_vec(1:2), rank_id, ierr)
+            this%rank_id(i, j, 1) = rank_id
+#else
+            this%rank_id(i, j, 1) = 0
+#endif
+
+            if (rank_x == mpi_coords(1) .and. rank_y == mpi_coords(2)) then
+                this%i_ndx(i, j, 1) = (i+i0) - rank_x*grid_Ndims(1)
+                this%j_ndx(i, j, 1) = (j+j0) - rank_y*grid_Ndims(2)
+                this%in_this_rank(i,j,1) = .true.
+            end if
+
+        end do
+        end do
+
+        norm = 0.0_dp
         do j = -this%n_sig, this%n_sig
         do i = -this%n_sig, this%n_sig
             this%ker_mat(i, j, 1) = exp(-(i*dr)**2/(2*this%sigma**2)) * &
@@ -199,8 +245,61 @@ subroutine init_src_trg(this, dim, r0, dr, type_ch, sigma, J_amp, grid_Ndims, mp
         if (.not.allocated(this%in_this_rank)) &
         allocate(this%in_this_rank(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, &
                                    -this%n_sig:this%n_sig))
+        if (.not.allocated(this%rank_id)) &
+        allocate(this%rank_id(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, &
+                              -this%n_sig:this%n_sig))
+        if (.not.allocated(this%trg_amp)) &
+        allocate(this%trg_amp(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, &
+                              -this%n_sig:this%n_sig))
+        if (.not.allocated(this%i_ndx)) &
+        allocate(this%i_ndx(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, &
+                            -this%n_sig:this%n_sig))
+        if (.not.allocated(this%j_ndx)) &
+        allocate(this%j_ndx(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, &
+                            -this%n_sig:this%n_sig))
+        if (.not.allocated(this%k_ndx)) &
+        allocate(this%k_ndx(-this%n_sig:this%n_sig, -this%n_sig:this%n_sig, &
+                 -this%n_sig:this%n_sig))
 
-        norm = R_0
+        this%in_this_rank = .false.
+
+        this%i_ndx = 0
+        this%j_ndx = 0
+        this%k_ndx = 0
+
+        i0 = int(this%r0(1)/dr) + int(grid_Ndims(1)*mpi_dims(1)/2)
+        j0 = int(this%r0(2)/dr) + int(grid_Ndims(2)*mpi_dims(2)/2)
+        k0 = int(this%r0(3)/dr) + int(grid_Ndims(3)*mpi_dims(3)/2)
+
+        do k = -this%n_sig, this%n_sig
+        do j = -this%n_sig, this%n_sig
+        do i = -this%n_sig, this%n_sig
+
+            rank_x = int((i0+i+1)/grid_Ndims(1))
+            rank_y = int((j0+j+1)/grid_Ndims(2))
+            rank_z = int((k0+k+1)/grid_Ndims(3))
+
+            rank_vec = (/rank_x, rank_y, rank_z/)
+
+#ifdef USE_MPI
+            call MPI_Cart_rank(mpi_cart_comm, rank_vec, rank_id, ierr)
+            this%rank_id(i, j, k) = rank_id
+#else
+            this%rank_id(i, j, k) = 0
+#endif
+            if (rank_x == mpi_coords(1) .and. rank_y == mpi_coords(2) .and. &
+                rank_z == mpi_coords(3)) then
+                this%i_ndx(i, j, k) = (i+i0) - rank_x*grid_Ndims(1)
+                this%j_ndx(i, j, k) = (j+j0) - rank_y*grid_Ndims(2)
+                this%k_ndx(i, j, k) = (k+k0) - rank_z*grid_Ndims(3)
+                this%in_this_rank(i,j,k) = .true.
+            end if
+
+        end do 
+        end do
+        end do
+
+        norm = 0.0_dp
         do k = -this%n_sig, this%n_sig
         do j = -this%n_sig, this%n_sig
         do i = -this%n_sig, this%n_sig
@@ -225,12 +324,14 @@ subroutine kill_src_trg(this)
 
     if (allocated(this%ker_mat))      deallocate(this%ker_mat)
     if (allocated(this%in_this_rank)) deallocate(this%in_this_rank)
+    if (allocated(this%rank_id))      deallocate(this%rank_id)
+    if (allocated(this%trg_amp))      deallocate(this%trg_amp)
 
 end subroutine kill_src_trg
 !###################################################################################################
 
 subroutine read_init_src_trg(src_trg_list, n_src_trg, n_src, n_trg, dimensions, id, dr, &
-                             grid_Ndims, mpi_coords, mpi_dims)
+                             grid_Ndims, mpi_cart_comm, mpi_coords, mpi_dims)
 
     type(TSrcTrg), allocatable, intent(inout) :: src_trg_list(:)
     integer                   , intent(out)   :: n_src_trg
@@ -242,6 +343,7 @@ subroutine read_init_src_trg(src_trg_list, n_src_trg, n_src, n_trg, dimensions, 
     integer                   , intent(in)    :: grid_Ndims(3)
     integer                   , intent(in)    :: mpi_coords(3)
     integer                   , intent(in)    :: mpi_dims(3)
+    integer                   , intent(in)    :: mpi_cart_comm
 
     character(len=20) :: file_name = "src_trg_list_"
     character(len=20) :: file_exten = ".in"
@@ -272,7 +374,6 @@ subroutine read_init_src_trg(src_trg_list, n_src_trg, n_src, n_trg, dimensions, 
         error stop
     end if
 
-    
     do
         read (funit, *, iostat=ierr)
         if (ierr /= 0) exit
@@ -289,7 +390,7 @@ subroutine read_init_src_trg(src_trg_list, n_src_trg, n_src, n_trg, dimensions, 
         read (funit, *, iostat=ierr) type_ch, amp_Re, amp_Im, r0(1), r0(2), r0(3), sigma
         J_amp = amp_Re*Z_ONE + amp_Im*Z_I
         call src_trg_list(i)%init_src_trg(dimensions, r0, dr, type_ch, sigma, J_amp, &
-                                           grid_Ndims, mpi_coords, mpi_dims)
+                                           grid_Ndims, mpi_cart_comm, mpi_coords, mpi_dims)
         
         if (src_trg_list(i)%is_a_source) n_src = n_src + 1
         if (src_trg_list(i)%is_a_target) n_trg = n_trg + 1
@@ -299,37 +400,37 @@ subroutine read_init_src_trg(src_trg_list, n_src_trg, n_src, n_trg, dimensions, 
 end subroutine read_init_src_trg
 !###################################################################################################
 
-subroutine set_source_J(src_trg, j_vec)
+subroutine set_source_J(src, j_vec)
     
-    type(TSrcTrg) , intent(in)    :: src_trg
+    type(TSrcTrg) , intent(in)    :: src
     class(TRSvec)  , intent(inout) :: j_vec
 
     integer :: i, j, k
     integer :: i_ndx, j_ndx, k_ndx
 
-    if (.not. src_trg%is_a_source) return
+    if (.not. src%is_a_source) return
 
     select type (j_vec)
     type is (TRSvec_1D)
-        i_ndx = src_trg%i_ndx
-        select case (src_trg%type)
+        i_ndx = src%i_ndx(0,1,1)
+        select case (src%type)
         case (Jx_SOURCE)
-            do i = -src_trg%n_sig, src_trg%n_sig
-                j_vec%pl_x(i_ndx + i) = src_trg%J_amp * src_trg%ker_mat(i, 1, 1)
+            do i = -src%n_sig, src%n_sig
+                j_vec%pl_x(i_ndx + i) = src%J_amp * src%ker_mat(i, 1, 1)
             end do
             j_vec%mi_x = j_vec%pl_x
         end select
     type is (TRSvec_2D)
-        i_ndx = src_trg%i_ndx
-        j_ndx = src_trg%j_ndx
+        i_ndx = src%i_ndx(0,0,1)
+        j_ndx = src%j_ndx(0,0,1)
 
-        select case (src_trg%type)
+        select case (src%type)
         case (Jx_SOURCE)
 
-            do j = -src_trg%n_sig, src_trg%n_sig
-            do i = -src_trg%n_sig, src_trg%n_sig
-                if (src_trg%in_this_rank(i, j, 1)) then
-                    j_vec%pl_x(i_ndx + i, j_ndx + j) = src_trg%J_amp * src_trg%ker_mat(i, j, 1)
+            do j = -src%n_sig, src%n_sig
+            do i = -src%n_sig, src%n_sig
+                if (src%in_this_rank(i, j, 1)) then
+                    j_vec%pl_x(i_ndx + i, j_ndx + j) = src%J_amp * src%ker_mat(i, j, 1)
                 end if
             end do
             end do
@@ -338,10 +439,10 @@ subroutine set_source_J(src_trg, j_vec)
 
         case (Jy_SOURCE)
 
-            do j = -src_trg%n_sig, src_trg%n_sig
-            do i = -src_trg%n_sig, src_trg%n_sig
-                if (src_trg%in_this_rank(i, j, 1)) then
-                    j_vec%pl_y(i_ndx + i, j_ndx + j) = src_trg%J_amp * src_trg%ker_mat(i, j, 1)
+            do j = -src%n_sig, src%n_sig
+            do i = -src%n_sig, src%n_sig
+                if (src%in_this_rank(i, j, 1)) then
+                    j_vec%pl_y(i_ndx + i, j_ndx + j) = src%J_amp * src%ker_mat(i, j, 1)
                 end if
             end do
             end do
@@ -350,10 +451,10 @@ subroutine set_source_J(src_trg, j_vec)
 
         case (Jz_SOURCE)
 
-            do j = -src_trg%n_sig, src_trg%n_sig
-            do i = -src_trg%n_sig, src_trg%n_sig
-                if (src_trg%in_this_rank(i, j, 1)) then
-                    j_vec%pl_z(i_ndx + i, j_ndx + j) = src_trg%J_amp * src_trg%ker_mat(i, j, 1)
+            do j = -src%n_sig, src%n_sig
+            do i = -src%n_sig, src%n_sig
+                if (src%in_this_rank(i, j, 1)) then
+                    j_vec%pl_z(i_ndx + i, j_ndx + j) = src%J_amp * src%ker_mat(i, j, 1)
                 end if
             end do
             end do
@@ -363,19 +464,19 @@ subroutine set_source_J(src_trg, j_vec)
         end select
     type is (TRSvec_3D)
 
-        i_ndx = src_trg%i_ndx
-        j_ndx = src_trg%j_ndx
-        k_ndx = src_trg%k_ndx
+        i_ndx = src%i_ndx(0,0,0)
+        j_ndx = src%j_ndx(0,0,0)
+        k_ndx = src%k_ndx(0,0,0)
 
-        select case (src_trg%type)
+        select case (src%type)
 
         case (Jx_SOURCE)
-            do k = -src_trg%n_sig, src_trg%n_sig
-            do j = -src_trg%n_sig, src_trg%n_sig
-            do i = -src_trg%n_sig, src_trg%n_sig
-                if (src_trg%in_this_rank(i, j, k)) then
+            do k = -src%n_sig, src%n_sig
+            do j = -src%n_sig, src%n_sig
+            do i = -src%n_sig, src%n_sig
+                if (src%in_this_rank(i, j, k)) then
                     j_vec%pl_x(i_ndx + i, j_ndx + j, k_ndx + k) = &
-                        src_trg%J_amp * src_trg%ker_mat(i, j, k)
+                        src%J_amp * src%ker_mat(i, j, k)
                 end if
             end do
             end do
@@ -383,12 +484,12 @@ subroutine set_source_J(src_trg, j_vec)
             j_vec%mi_x = j_vec%pl_x
 
         case (Jy_SOURCE)
-            do k = -src_trg%n_sig, src_trg%n_sig
-            do j = -src_trg%n_sig, src_trg%n_sig
-            do i = -src_trg%n_sig, src_trg%n_sig
-                if (src_trg%in_this_rank(i, j, k)) then
+            do k = -src%n_sig, src%n_sig
+            do j = -src%n_sig, src%n_sig
+            do i = -src%n_sig, src%n_sig
+                if (src%in_this_rank(i, j, k)) then
                     j_vec%pl_y(i_ndx + i, j_ndx + j, k_ndx + k) = &
-                        src_trg%J_amp * src_trg%ker_mat(i, j, k)
+                        src%J_amp * src%ker_mat(i, j, k)
                 end if
             end do
             end do
@@ -396,12 +497,12 @@ subroutine set_source_J(src_trg, j_vec)
             j_vec%mi_y = j_vec%pl_y
 
         case (Jz_SOURCE)
-            do k = -src_trg%n_sig, src_trg%n_sig
-            do j = -src_trg%n_sig, src_trg%n_sig
-            do i = -src_trg%n_sig, src_trg%n_sig
-                if (src_trg%in_this_rank(i, j, k)) then
+            do k = -src%n_sig, src%n_sig
+            do j = -src%n_sig, src%n_sig
+            do i = -src%n_sig, src%n_sig
+                if (src%in_this_rank(i, j, k)) then
                     j_vec%pl_z(i_ndx + i, j_ndx + j, k_ndx + k) = &
-                        src_trg%J_amp * src_trg%ker_mat(i, j, k)
+                        src%J_amp * src%ker_mat(i, j, k)
                 end if
             end do
             end do
@@ -413,6 +514,324 @@ subroutine set_source_J(src_trg, j_vec)
 
 end subroutine set_source_J
 
+!###################################################################################################
+
+subroutine update_target(trg, f_vec, w_dL, w_total)
+
+    type(TSrcTrg)  , intent(inout) :: trg
+    class(TRSvec)  , intent(inout) :: f_vec
+    real(dp)       , intent(inout) :: w_dL
+    real(dp)       , intent(inout) :: w_total
+
+    complex(dp) :: E_field
+    integer     :: i0, j0, k0
+
+    if (.not. trg%is_a_target) return
+
+    select type (f_vec)
+    type is (TRSvec_1D)
+
+        if (.not. trg%in_this_rank(0, 1, 1)) return
+
+        i0 = trg%i_ndx(0, 1, 1)
+
+        E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_x(i0)+f_vec%mi_x(i0))
+
+        select case (trg%type)
+        case(Re_Ex_TARGET)
+            w_dL = DABS(DREAL(E_field))
+            trg%J_amp = DSQRT(1.0_dp/(2.0_dp*eps0)) * DREAL(E_field)
+        case(Im_Ex_TARGET)
+            w_dL  = DABS(DIMAG(E_field))
+            trg%J_amp = Z_I*DSQRT(1.0_dp/(2.0_dp*eps0)) * DIMAG(E_field)
+        case(Abs_Ex_TARGET)
+            w_dL  = ABS(E_field)
+            trg%J_amp = -DSQRT(1.0_dp/(2.0_dp*eps0)) * DCONJG(E_field)
+        end select
+
+    type is (TRSvec_2D)
+
+        if (.not. trg%in_this_rank(0, 0, 1)) return
+
+        i0 = trg%i_ndx(0, 0, 1)
+        j0 = trg%j_ndx(0, 0, 1)
+
+        select case (trg%type)
+        case(Re_Ex_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_x(i0, j0)+f_vec%mi_x(i0, j0))
+            w_dL  = DABS(DREAL(E_field))
+            trg%J_amp = DSQRT(1.0_dp/(2.0_dp*eps0)) * DREAL(E_field)
+        case(Im_Ex_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_x(i0, j0)+f_vec%mi_x(i0, j0))
+            w_dL  = DABS(DIMAG(E_field))
+            trg%J_amp = Z_I*DSQRT(1.0_dp/(2.0_dp*eps0)) * DIMAG(E_field)
+        case(Abs_Ex_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_x(i0, j0)+f_vec%mi_x(i0, j0))
+            w_dL  = ABS(E_field)
+            trg%J_amp = -DSQRT(1.0_dp/(2.0_dp*eps0)) * DCONJG(E_field)
+        case(Re_Ey_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_y(i0, j0)+f_vec%mi_y(i0, j0))
+            w_dL  = DABS(DREAL(E_field))
+            trg%J_amp = DSQRT(1.0_dp/(2.0_dp*eps0)) * DREAL(E_field)
+        case(Im_Ey_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_y(i0, j0)+f_vec%mi_y(i0, j0))
+            w_dL  = DABS(DIMAG(E_field))
+            trg%J_amp = Z_I*DSQRT(1.0_dp/(2.0_dp*eps0)) * DIMAG(E_field)
+        case(Abs_Ey_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_y(i0, j0)+f_vec%mi_y(i0, j0))
+            w_dL  = ABS(E_field)
+            trg%J_amp = -DSQRT(1.0_dp/(2.0_dp*eps0)) * DCONJG(E_field)
+        case(Re_Ez_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_z(i0, j0)+f_vec%mi_z(i0, j0))
+            w_dL  = DABS(DREAL(E_field))
+            trg%J_amp = DSQRT(1.0_dp/(2.0_dp*eps0)) * DREAL(E_field)
+        case(Im_Ez_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_z(i0, j0)+f_vec%mi_z(i0, j0))
+            w_dL  = DABS(DIMAG(E_field))
+            trg%J_amp = Z_I*DSQRT(1.0_dp/(2.0_dp*eps0)) * DIMAG(E_field)
+        case(Abs_Ez_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_z(i0, j0)+f_vec%mi_z(i0, j0))
+            w_dL  = ABS(E_field)
+            trg%J_amp = -DSQRT(1.0_dp/(2.0_dp*eps0)) * DCONJG(E_field)
+        end select
+    type is (TRSvec_3D)
+
+        if (.not. trg%in_this_rank(0, 0, 0)) return
+
+        i0 = trg%i_ndx(0, 0, 0)
+        j0 = trg%j_ndx(0, 0, 0)
+        k0 = trg%k_ndx(0, 0, 0)
+
+        select case (trg%type)
+        case(Re_Ex_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_x(i0, j0, k0)+f_vec%mi_x(i0, j0, k0))
+            w_dL  = DABS(DREAL(E_field))
+            trg%J_amp = DSQRT(1.0_dp/(2.0_dp*eps0)) * DREAL(E_field)
+        case(Im_Ex_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_x(i0, j0, k0)+f_vec%mi_x(i0, j0, k0))
+            w_dL  = DABS(DIMAG(E_field))
+            trg%J_amp = Z_I*DSQRT(1.0_dp/(2.0_dp*eps0)) * DIMAG(E_field)
+        case(Abs_Ex_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_x(i0, j0, k0)+f_vec%mi_x(i0, j0, k0))
+            w_dL  = ABS(E_field)
+            trg%J_amp = -DSQRT(1.0_dp/(2.0_dp*eps0)) * DCONJG(E_field)
+        case(Re_Ey_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_y(i0, j0, k0)+f_vec%mi_y(i0, j0, k0))
+            w_dL  = DABS(DREAL(E_field))
+            trg%J_amp = DSQRT(1.0_dp/(2.0_dp*eps0)) * DREAL(E_field)
+        case(Im_Ey_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_y(i0, j0, k0)+f_vec%mi_y(i0, j0, k0))
+            w_dL  = DABS(DIMAG(E_field))
+            trg%J_amp = Z_I*DSQRT(1.0_dp/(2.0_dp*eps0)) * DIMAG(E_field)
+        case(Abs_Ey_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_y(i0, j0, k0)+f_vec%mi_y(i0, j0, k0))
+            w_dL  = ABS(E_field)
+            trg%J_amp = -DSQRT(1.0_dp/(2.0_dp*eps0)) * DCONJG(E_field)
+        case(Re_Ez_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_z(i0, j0, k0)+f_vec%mi_z(i0, j0, k0))
+            w_dL  = DABS(DREAL(E_field))
+            trg%J_amp = DSQRT(1.0_dp/(2.0_dp*eps0)) * DREAL(E_field)
+        case(Im_Ez_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_z(i0, j0, k0)+f_vec%mi_z(i0, j0, k0))
+            w_dL  = DABS(DIMAG(E_field))
+            trg%J_amp = Z_I*DSQRT(1.0_dp/(2.0_dp*eps0)) * DIMAG(E_field)
+        case(Abs_Ez_TARGET)
+            E_field = DSQRT(1.0_dp/(2.0_dp*eps0)) * (f_vec%pl_z(i0, j0, k0)+f_vec%mi_z(i0, j0, k0))
+            w_dL  = ABS(E_field)
+            trg%J_amp = -DSQRT(1.0_dp/(2.0_dp*eps0)) * DCONJG(E_field)
+        end select
+    end select
+
+end subroutine update_target
+
+!###################################################################################################
+
+subroutine set_jtrg(trg, j_vec)
+
+    type(TSrcTrg)  , intent(in)    :: trg
+    class(TRSvec)  , intent(inout) :: j_vec
+
+    logical :: source_in_this_rank
+    integer :: i, j, k
+    integer :: i_ndx, j_ndx, k_ndx
+    complex(dp) :: J_recv, J_sent
+
+#ifdef USE_MPI
+    integer :: istatus(MPI_STATUS_SIZE)
+    integer :: ierr
+#endif
+
+    if (.not. trg%is_a_target) return
+
+    select type (j_vec)
+    type is (TRSvec_1D)
+
+        j_vec%pl_x = 0.0_dp
+        j_vec%mi_x = 0.0_dp
+        j_vec%pl_y = 0.0_dp
+        j_vec%mi_y = 0.0_dp
+
+        select case (trg%type)
+        case (Re_Ex_TARGET, Im_Ex_TARGET, Abs_Ex_TARGET)
+
+            do i = -trg%n_sig, trg%n_sig
+                
+                i_ndx = trg%i_ndx(i,1,1)
+                
+                j_vec%pl_x(i_ndx) = trg%J_amp * trg%ker_mat(i, 1, 1)
+
+            end do
+        end select
+
+    type is (TRSvec_2D)
+
+        j_vec%pl_x = 0.0_dp
+        j_vec%mi_x = 0.0_dp
+        j_vec%pl_y = 0.0_dp
+        j_vec%mi_y = 0.0_dp
+        j_vec%pl_z = 0.0_dp
+        j_vec%mi_z = 0.0_dp
+
+        source_in_this_rank = trg%in_this_rank(0, 0, 1)
+
+        do j = -trg%n_sig, trg%n_sig
+        do i = -trg%n_sig, trg%n_sig
+
+            i_ndx = trg%i_ndx(i,j,1)
+            j_ndx = trg%j_ndx(i,j,1)
+
+            select case (trg%type)
+            case (Re_Ex_TARGET, Im_Ex_TARGET, Abs_Ex_TARGET)
+                if (trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
+                    j_vec%pl_x(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+#ifdef USE_MPI
+                else if (trg%in_this_rank(i, j, 1) .and. .not. source_in_this_rank) then
+                    call mpi_recv(J_recv,1,mpi_double_complex, &
+                                  trg%rank_id(0,0,1), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
+                    trg%J_amp = J_recv
+                    j_vec%pl_x(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+
+                else if (.not. trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
+                    J_sent = trg%J_amp
+                    call mpi_send(J_sent,1,mpi_double_complex, &
+                                  trg%rank_id(i, j, 1), MPI_GOOD_TAG, MPI_COMM_WORLD, ierr)
+#endif
+                end if
+
+            case (Re_Ey_TARGET, Im_Ey_TARGET, Abs_Ey_TARGET)
+                if (trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
+                    j_vec%pl_y(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+#ifdef USE_MPI
+                else if (trg%in_this_rank(i, j, 1) .and. .not. source_in_this_rank) then
+                    call mpi_recv(J_recv,1,mpi_double_complex, &
+                                  trg%rank_id(0,0,1), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
+                    trg%J_amp = J_recv
+                    j_vec%pl_y(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+
+                else if (.not. trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
+                    J_sent = trg%J_amp
+                    call mpi_send(J_sent,1,mpi_double_complex, &
+                                  trg%rank_id(i, j, 1), MPI_GOOD_TAG, MPI_COMM_WORLD, ierr)
+#endif
+                end if
+
+            case (Re_Ez_TARGET, Im_Ez_TARGET, Abs_Ez_TARGET)
+                if (trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
+                    j_vec%pl_z(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+#ifdef USE_MPI
+                else if (trg%in_this_rank(i, j, 1) .and. .not. source_in_this_rank) then
+                    call mpi_recv(J_recv,1,mpi_double_complex, &
+                                  trg%rank_id(0,0,1), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
+                    trg%J_amp = J_recv
+                    j_vec%pl_z(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+
+                else if (.not. trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
+                    J_sent = trg%J_amp
+                    call mpi_send(J_sent,1,mpi_double_complex, &
+                                  trg%rank_id(i, j, 1), MPI_GOOD_TAG, MPI_COMM_WORLD, ierr)
+#endif
+                end if
+
+            end select
+        end do
+        end do
+
+    type is (TRSvec_3D)
+
+        j_vec%pl_x = 0.0_dp
+        j_vec%mi_x = 0.0_dp
+        j_vec%pl_y = 0.0_dp
+        j_vec%mi_y = 0.0_dp
+        j_vec%pl_z = 0.0_dp
+        j_vec%mi_z = 0.0_dp
+
+         source_in_this_rank = trg%in_this_rank(0, 0, 0)
+
+        do k = -trg%n_sig, trg%n_sig
+        do j = -trg%n_sig, trg%n_sig
+        do i = -trg%n_sig, trg%n_sig
+
+            i_ndx = trg%i_ndx(i,j,k)
+            j_ndx = trg%j_ndx(i,j,k)
+            k_ndx = trg%k_ndx(i,j,k)
+
+            select case (trg%type)
+            case (Re_Ex_TARGET, Im_Ex_TARGET, Abs_Ex_TARGET)
+                if (trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
+                    j_vec%pl_x(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+#ifdef USE_MPI
+                else if (trg%in_this_rank(i, j, k) .and. .not. source_in_this_rank) then
+                    call mpi_recv(J_recv,1,mpi_double_complex, &
+                                  trg%rank_id(0,0,0), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
+                    trg%J_amp = J_recv
+                    j_vec%pl_x(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+                else if (.not. trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
+                    J_sent = trg%J_amp
+                    call mpi_send(J_sent,1,mpi_double_complex, &
+                                  trg%rank_id(i, j, k), MPI_GOOD_TAG, MPI_COMM_WORLD, ierr)
+#endif
+                end if
+
+            case (Re_Ey_TARGET, Im_Ey_TARGET, Abs_Ey_TARGET)
+                if (trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
+                    j_vec%pl_y(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+#ifdef USE_MPI
+                else if (trg%in_this_rank(i, j, k) .and. .not. source_in_this_rank) then
+                    call mpi_recv(J_recv,1,mpi_double_complex, &
+                                  trg%rank_id(0,0,0), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
+                    trg%J_amp = J_recv
+                    j_vec%pl_y(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+                else if (.not. trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
+                    J_sent = trg%J_amp
+                    call mpi_send(J_sent,1,mpi_double_complex, &
+                                  trg%rank_id(i, j, k), MPI_GOOD_TAG, MPI_COMM_WORLD, ierr)
+#endif
+                end if
+
+            case (Re_Ez_TARGET, Im_Ez_TARGET, Abs_Ez_TARGET)
+                if (trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
+                    j_vec%pl_z(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+#ifdef USE_MPI
+                else if (trg%in_this_rank(i, j, k) .and. .not. source_in_this_rank) then
+                    call mpi_recv(J_recv,1,mpi_double_complex, &
+                                  trg%rank_id(0,0,0), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
+                    trg%J_amp = J_recv
+                    j_vec%pl_z(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+                else if (.not. trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
+                    J_sent = trg%J_amp
+                    call mpi_send(J_sent,1,mpi_double_complex, &
+                                  trg%rank_id(i, j, k), MPI_GOOD_TAG, MPI_COMM_WORLD, ierr)
+#endif
+                end if
+
+            end select
+
+        end do
+        end do
+        end do
+    end select
+
+end subroutine set_jtrg 
 !###################################################################################################
 
 end module target_source_mod
