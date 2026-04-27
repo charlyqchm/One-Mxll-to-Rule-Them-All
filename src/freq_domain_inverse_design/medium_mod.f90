@@ -79,6 +79,7 @@ subroutine read_medium(this, id, dr, grid_Ndims, mpi_coords, mpi_dims)
     character(len=20) :: file_exten = ".in"
     character(len=20) :: file_number
     character(len=20) :: input_name
+    logical           :: file_exists
     integer           :: ierr, funit
     integer           :: i, j, k
     integer           :: rank_x, rank_y, rank_z
@@ -90,15 +91,15 @@ subroutine read_medium(this, id, dr, grid_Ndims, mpi_coords, mpi_dims)
 
     input_name = trim(file_name) // trim(file_number) // trim(file_exten)
 
-    inquire (file=input_name, iostat=ierr)
-    
-    if (ierr /= 0) then
+    inquire(file=input_name, exist=file_exists, iostat=ierr)
+   
+    if (.not. file_exists) then
         write (*, '("Warning: medium file ", A, " does not exist")') input_name
         write(*, '("No medium is concidered in problem ", I0)') id
 
     else
 
-        open (action='read', file=input_name, iostat=ierr, newunit=funit)
+        open(action='read', file=input_name, iostat=ierr, newunit=funit)
         if (ierr /= 0) then
             write (*, '("Error: cannot open medium file ", A)') input_name
             error stop

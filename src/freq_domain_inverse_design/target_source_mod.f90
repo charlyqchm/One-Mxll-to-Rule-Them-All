@@ -642,6 +642,8 @@ subroutine update_target(trg, f_vec, w_dL, w_total)
         end select
     end select
 
+    w_total = w_total + w_dL
+
 end subroutine update_target
 
 !###################################################################################################
@@ -679,6 +681,7 @@ subroutine set_jtrg(trg, j_vec)
                 i_ndx = trg%i_ndx(i,1,1)
                 
                 j_vec%pl_x(i_ndx) = trg%J_amp * trg%ker_mat(i, 1, 1)
+                j_vec%mi_x(i_ndx) = j_vec%pl_x(i_ndx)
 
             end do
         end select
@@ -704,12 +707,14 @@ subroutine set_jtrg(trg, j_vec)
             case (Re_Ex_TARGET, Im_Ex_TARGET, Abs_Ex_TARGET)
                 if (trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
                     j_vec%pl_x(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+                    j_vec%mi_x(i_ndx, j_ndx) = j_vec%pl_x(i_ndx, j_ndx)
 #ifdef USE_MPI
                 else if (trg%in_this_rank(i, j, 1) .and. .not. source_in_this_rank) then
                     call mpi_recv(J_recv,1,mpi_double_complex, &
                                   trg%rank_id(0,0,1), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
                     trg%J_amp = J_recv
                     j_vec%pl_x(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+                    j_vec%mi_x(i_ndx, j_ndx) = j_vec%pl_x(i_ndx, j_ndx)
 
                 else if (.not. trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
                     J_sent = trg%J_amp
@@ -721,12 +726,14 @@ subroutine set_jtrg(trg, j_vec)
             case (Re_Ey_TARGET, Im_Ey_TARGET, Abs_Ey_TARGET)
                 if (trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
                     j_vec%pl_y(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+                    j_vec%mi_y(i_ndx, j_ndx) = j_vec%pl_y(i_ndx, j_ndx)
 #ifdef USE_MPI
                 else if (trg%in_this_rank(i, j, 1) .and. .not. source_in_this_rank) then
                     call mpi_recv(J_recv,1,mpi_double_complex, &
                                   trg%rank_id(0,0,1), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
                     trg%J_amp = J_recv
                     j_vec%pl_y(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+                    j_vec%mi_y(i_ndx, j_ndx) = j_vec%pl_y(i_ndx, j_ndx)
 
                 else if (.not. trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
                     J_sent = trg%J_amp
@@ -738,12 +745,14 @@ subroutine set_jtrg(trg, j_vec)
             case (Re_Ez_TARGET, Im_Ez_TARGET, Abs_Ez_TARGET)
                 if (trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
                     j_vec%pl_z(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+                    j_vec%mi_z(i_ndx, j_ndx) = j_vec%pl_z(i_ndx, j_ndx)
 #ifdef USE_MPI
                 else if (trg%in_this_rank(i, j, 1) .and. .not. source_in_this_rank) then
                     call mpi_recv(J_recv,1,mpi_double_complex, &
                                   trg%rank_id(0,0,1), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
                     trg%J_amp = J_recv
                     j_vec%pl_z(i_ndx, j_ndx) = trg%J_amp * trg%ker_mat(i, j, 1)
+                    j_vec%mi_z(i_ndx, j_ndx) = j_vec%pl_z(i_ndx, j_ndx)
 
                 else if (.not. trg%in_this_rank(i, j, 1) .and. source_in_this_rank) then
                     J_sent = trg%J_amp
@@ -779,12 +788,14 @@ subroutine set_jtrg(trg, j_vec)
             case (Re_Ex_TARGET, Im_Ex_TARGET, Abs_Ex_TARGET)
                 if (trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
                     j_vec%pl_x(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+                    j_vec%mi_x(i_ndx, j_ndx, k_ndx) = j_vec%pl_x(i_ndx, j_ndx, k_ndx)
 #ifdef USE_MPI
                 else if (trg%in_this_rank(i, j, k) .and. .not. source_in_this_rank) then
                     call mpi_recv(J_recv,1,mpi_double_complex, &
                                   trg%rank_id(0,0,0), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
                     trg%J_amp = J_recv
                     j_vec%pl_x(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+                    j_vec%mi_x(i_ndx, j_ndx, k_ndx) = j_vec%pl_x(i_ndx, j_ndx, k_ndx)
                 else if (.not. trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
                     J_sent = trg%J_amp
                     call mpi_send(J_sent,1,mpi_double_complex, &
@@ -795,12 +806,14 @@ subroutine set_jtrg(trg, j_vec)
             case (Re_Ey_TARGET, Im_Ey_TARGET, Abs_Ey_TARGET)
                 if (trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
                     j_vec%pl_y(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+                    j_vec%mi_y(i_ndx, j_ndx, k_ndx) = j_vec%pl_y(i_ndx, j_ndx, k_ndx)
 #ifdef USE_MPI
                 else if (trg%in_this_rank(i, j, k) .and. .not. source_in_this_rank) then
                     call mpi_recv(J_recv,1,mpi_double_complex, &
                                   trg%rank_id(0,0,0), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
                     trg%J_amp = J_recv
                     j_vec%pl_y(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+                    j_vec%mi_y(i_ndx, j_ndx, k_ndx) = j_vec%pl_y(i_ndx, j_ndx, k_ndx)
                 else if (.not. trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
                     J_sent = trg%J_amp
                     call mpi_send(J_sent,1,mpi_double_complex, &
@@ -811,12 +824,14 @@ subroutine set_jtrg(trg, j_vec)
             case (Re_Ez_TARGET, Im_Ez_TARGET, Abs_Ez_TARGET)
                 if (trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
                     j_vec%pl_z(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+                    j_vec%mi_z(i_ndx, j_ndx, k_ndx) = j_vec%pl_z(i_ndx, j_ndx, k_ndx)
 #ifdef USE_MPI
                 else if (trg%in_this_rank(i, j, k) .and. .not. source_in_this_rank) then
                     call mpi_recv(J_recv,1,mpi_double_complex, &
                                   trg%rank_id(0,0,0), MPI_GOOD_TAG, MPI_COMM_WORLD,istatus,ierr)
                     trg%J_amp = J_recv
                     j_vec%pl_z(i_ndx, j_ndx, k_ndx) = trg%J_amp * trg%ker_mat(i, j, k)
+                    j_vec%mi_z(i_ndx, j_ndx, k_ndx) = j_vec%pl_z(i_ndx, j_ndx, k_ndx)
                 else if (.not. trg%in_this_rank(i, j, k) .and. source_in_this_rank) then
                     J_sent = trg%J_amp
                     call mpi_send(J_sent,1,mpi_double_complex, &

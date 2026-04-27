@@ -65,8 +65,8 @@ contains
 
 !###################################################################################################
 
-subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, boundaries, restart, &
-                         n_pml, grid_Ndims, mpi_cart_comm, mpi_coords, mpi_dims)
+subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, eta, boundaries, restart, &
+                         n_pml, grid_Ndims, n_der, mpi_cart_comm, mpi_coords, mpi_dims)
 
     class(TOptPrblm) , intent(inout) :: this
     logical          , intent(in)    :: restart
@@ -78,10 +78,12 @@ subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, boundari
     integer          , intent(in)    :: mpi_coords(3)
     integer          , intent(in)    :: mpi_dims(3)
     integer          , intent(in)    :: n_pml
+    integer          , intent(in)    :: n_der
     real(dp)         , intent(in)    :: dr
     real(dp)         , intent(in)    :: freq
     real(dp)         , intent(in)    :: eps_Re
     real(dp)         , intent(in)    :: eps_Im
+    real(dp)         , intent(in)    :: eta
 
     integer  :: i
     real(dp) :: eps_amp
@@ -96,6 +98,7 @@ subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, boundari
     this%id         = id
     this%eps_Re     = eps_Re
     this%eps_Im     = eps_Im
+    this%eta_rho    = eta
 
     if (eps_Im /= 0.0d0) then
         this%is_complex  = .true.
@@ -113,14 +116,14 @@ subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, boundari
     this%j_src     = rs_vec_factory(dimensions)
     this%j_trg     = rs_vec_factory(dimensions)
 
-    call this%f_vec%init(grid_Ndims, dr, dimensions, freq)
-    call this%f_vec_new%init(grid_Ndims, dr, dimensions, freq)
-    call this%Af_vec%init(grid_Ndims, dr, dimensions, freq)
-    call this%j_src%init(grid_Ndims, dr, dimensions, freq)
-    call this%j_trg%init(grid_Ndims, dr, dimensions, freq)
+    call this%f_vec%init(grid_Ndims, dr, dimensions, freq, n_der)
+    call this%f_vec_new%init(grid_Ndims, dr, dimensions, freq, n_der)
+    call this%Af_vec%init(grid_Ndims, dr, dimensions, freq, n_der)
+    call this%j_src%init(grid_Ndims, dr, dimensions, freq, n_der)
+    call this%j_trg%init(grid_Ndims, dr, dimensions, freq, n_der)
 
-    call this%A_op%init_operator(dr, freq, dimensions, grid_Ndims, n_pml, boundaries, &
-                                 mpi_dims, mpi_coords)
+    call this%A_op%init_operator(dr, freq, dimensions, grid_Ndims, n_pml, n_der, &
+                                 boundaries, mpi_dims, mpi_coords)
 
     call allocate_multidim(array = this%opt_region, dim = dimensions, i_max = this%nx, &
                            j_max = this%ny, k_max = this%nz)
@@ -145,15 +148,18 @@ subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, boundari
                            grid_Ndims, mpi_cart_comm, mpi_coords, mpi_dims)
 
     do i = 1, this%n_src_trg
-        call set_source_J(this%src_trg(i), this%j_trg)
+        call set_source_J(this%src_trg(i), this%j_src)
     end do
 
-    this%f_adj_vec     = rs_vec_factory(dimensions, this%n_trg)
-    this%f_adj_vec_new = rs_vec_factory(dimensions, this%n_trg)
+    if (allocated(this%f_adj_vec))     deallocate(this%f_adj_vec)
+    if (allocated(this%f_adj_vec_new)) deallocate(this%f_adj_vec_new)
+
+    allocate(this%f_adj_vec, source=rs_vec_factory_array(dim=dimensions, n_max=this%n_trg))
+    allocate(this%f_adj_vec_new, source=rs_vec_factory_array(dim=dimensions, n_max=this%n_trg))
 
     do i =1, this%n_trg
-        call this%f_adj_vec(i)%init(grid_Ndims, dr, dimensions, freq)
-        call this%f_adj_vec_new(i)%init(grid_Ndims, dr, dimensions, freq)
+        call this%f_adj_vec(i)%init(grid_Ndims, dr, dimensions, freq, n_der)
+        call this%f_adj_vec_new(i)%init(grid_Ndims, dr, dimensions, freq, n_der)
     end do
 
     if (.not. allocated(this%w_dL)) allocate(this%w_dL(this%n_trg))
@@ -214,6 +220,8 @@ subroutine solve_forward(this, bicgstab_tol, bicgstab_max_iter, bicgstab_L_term,
     logical    :: transpose
     real(dp)   :: bicgstab_error
 
+    integer :: i
+
     transpose = .false.
 
     call BICGStab_L(this%A_op, this%f_vec, this%j_src, this%f_vec_new, this%Af_vec, &
@@ -242,27 +250,29 @@ subroutine solve_adjoint(this, bicgstab_tol, bicgstab_max_iter, bicgstab_L_term,
     real(dp)         , intent(in)    :: delta_p
     
     integer    :: n
+    integer    :: n_trg
     logical    :: transpose
     real(dp)   :: bicgstab_error
 
     transpose = .true.
 
+    n_trg = 1
     do n = 1, this%n_src_trg
         if (this%src_trg(n)%is_a_target) then
 
             call set_jtrg(this%src_trg(n), this%j_trg)
 
-            call BICGStab_L(this%A_op, this%f_adj_vec(n), this%j_trg, this%f_adj_vec_new(n), &
+            call BICGStab_L(this%A_op, this%f_adj_vec(n_trg), this%j_trg, this%f_adj_vec_new(n_trg), &
                             this%Af_vec, this%eps_r, converged, transpose, bicgstab_tol,     &
                             bicgstab_max_iter, bicgstab_L_term, bicgstab_error)
 
             if (.not. converged) then
                 write(*, *) "Warning, bicgstab-L has not converged adjoint F vector"
                 write(*, *) "Problem:",this%id,"drho:",delta_p,"Step:", opt_step
-                write(*, *) "Target:", n
+                write(*, *) "Target:", n_trg
                 write(*, *) "Total Error =", bicgstab_error
             end if
-
+            n_trg = n_trg + 1
         end if
     end do
         
@@ -302,45 +312,45 @@ subroutine compute_gradient(this, rho_conv)
     type is (TRSvec_1D)
     select type (f_adj_vec => this%f_adj_vec)
     type is (TRSvec_1D)
-        nz = this%nz
+        nx = this%nx
 
         if(this%is_complex) then
-            do k =1, nz
-                df_drho   = C1*beta_p*(1.0/DCOSH(beta_p*(rho_conv(k,1,1)-eta_p))**2)
-                func_rho  = C1*DTANH(beta_p*(rho_conv(k,1,1)-eta_p)) + C2
+            do i =1, nx
+                df_drho   = C1*beta_p*(1.0/DCOSH(beta_p*(rho_conv(i,1,1)-eta_p))**2)
+                func_rho  = C1*DTANH(beta_p*(rho_conv(i,1,1)-eta_p)) + C2
                 eta       = (this%eta_max - this%eta_min)*func_rho + this%eta_min
                 kappa     = this%kappa_max*func_rho
                 deps_drho = 2.0d0*eps0*df_drho*((this%eta_max-this%eta_min)*(Z_ONE*eta-Z_I*kappa)+ &
                                                  this%kappa_max*(-Z_ONE*kappa-Z_I*eta))
-                this%dA(k,1,1) = -Z_I * w0 * deps_drho 
+                this%dA(i,1,1) = -Z_I * w0 * deps_drho 
             end do
         else
-            do k = 1, nz
-                df_drho   =   C1*beta_p*(1.0/DCOSH(beta_p*(rho_conv(k,1,1)-eta_p))**2)
+            do i = 1, nx
+                df_drho   =   C1*beta_p*(1.0/DCOSH(beta_p*(rho_conv(i,1,1)-eta_p))**2)
                 deps_drho =   Z_ONE * df_drho * (eps_r*eps0 - eps0)
-                this%dA(k,1,1) = -Z_I * w0 * deps_drho
+                this%dA(i,1,1) = -Z_I * w0 * deps_drho
             end do
         end if
 
-        do k = 1, nz
-            this%grad(k,1,1) = 0.0d0
+        do i = 1, nx
+            this%grad(i,1,1) = 0.0d0
             do n = 1, this%n_trg
 
-                this%grad(k,1,1) = this%grad(k,1,1) + real( &
-                1.0d0/this%w_dL(n) * f_adj_vec(n)%pl_x(k) * this%dA(k,1,1) * &
-                (f_vec%pl_x(k) + f_vec%mi_x(k)), kind=dp)
+                this%grad(i,1,1) = this%grad(i,1,1) + real( &
+                1.0d0/this%w_dL(n) * f_adj_vec(n)%pl_x(i) * this%dA(i,1,1) * &
+                (f_vec%pl_x(i) + f_vec%mi_x(i)), kind=dp)
 
-                this%grad(k,1,1) = this%grad(k,1,1) + real( &
-                1.0d0/this%w_dL(n) * f_adj_vec(n)%pl_y(k) * this%dA(k,1,1) * &
-                (f_vec%pl_y(k) + f_vec%mi_y(k)), kind=dp)
+                this%grad(i,1,1) = this%grad(i,1,1) + real( &
+                1.0d0/this%w_dL(n) * f_adj_vec(n)%pl_y(i) * this%dA(i,1,1) * &
+                (f_vec%pl_y(i) + f_vec%mi_y(i)), kind=dp)
 
-                this%grad(k,1,1) = this%grad(k,1,1) + real( &
-                1.0d0/this%w_dL(n) * f_adj_vec(n)%mi_x(k) * this%dA(k,1,1) * &
-                (f_vec%pl_x(k) + f_vec%mi_x(k)), kind=dp)
+                this%grad(i,1,1) = this%grad(i,1,1) + real( &
+                1.0d0/this%w_dL(n) * f_adj_vec(n)%mi_x(i) * this%dA(i,1,1) * &
+                (f_vec%pl_x(i) + f_vec%mi_x(i)), kind=dp)
 
-                this%grad(k,1,1) = this%grad(k,1,1) + real( &
-                1.0d0/this%w_dL(n) * f_adj_vec(n)%mi_y(k) * this%dA(k,1,1) * &
-                (f_vec%pl_y(k) + f_vec%mi_y(k)), kind=dp)
+                this%grad(i,1,1) = this%grad(i,1,1) + real( &
+                1.0d0/this%w_dL(n) * f_adj_vec(n)%mi_y(i) * this%dA(i,1,1) * &
+                (f_vec%pl_y(i) + f_vec%mi_y(i)), kind=dp)
 
             end do  
         end do
@@ -673,11 +683,16 @@ subroutine update_targets(this)
     class(TOptPrblm) , intent(inout) :: this
 
     integer :: n
+    integer :: n_trg
 
     this%w_total = 0.0d0
 
+    n_trg = 1
     do n = 1, this%n_src_trg
-        call update_target(this%src_trg(n), this%f_vec_new, this%w_dL(n), this%w_total)
+        if (this%src_trg(n)%is_a_target) then
+            call update_target(this%src_trg(n), this%f_vec_new, this%w_dL(n_trg), this%w_total)
+            n_trg = n_trg + 1
+        end if
     end do
 
 end subroutine update_targets

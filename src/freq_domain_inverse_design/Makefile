@@ -1,6 +1,6 @@
 FC=gfortran
-# FFLAGS=-g -fopenmp -ffpe-trap=invalid,zero,overflow -fbacktrace
-FFLAGS=-O3 -cpp -fopenmp
+# FFLAGS=-O3 -cpp -fopenmp
+FFLAGS=-O0 -g -cpp -fopenmp -fbacktrace -fcheck=all -Wall -Wextra -ffpe-trap=invalid,zero,overflow
 
 SRC:=constants_mod.f90
 SRC+=input_mod.f90

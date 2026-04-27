@@ -7,6 +7,7 @@ module rs_vec_base_mod
     type, abstract :: TRSvec
 
         integer  :: dimensions
+        integer  :: n_der
         real(dp) :: freq
         real(dp) :: dr
         
@@ -19,7 +20,7 @@ module rs_vec_base_mod
 
     abstract interface
 
-        subroutine init_interface(this, grid_Ndims, dr, dimensions, freq)
+        subroutine init_interface(this, grid_Ndims, dr, dimensions, freq, n_der)
         
             import :: TRSvec, dp
             class(TRSvec), intent(inout) :: this
@@ -27,6 +28,7 @@ module rs_vec_base_mod
             integer     , intent(in)     :: dimensions
             real(dp)    , intent(in)     :: dr
             real(dp)    , intent(in)     :: freq
+            integer     , intent(in)     :: n_der
 
         end subroutine init_interface
 

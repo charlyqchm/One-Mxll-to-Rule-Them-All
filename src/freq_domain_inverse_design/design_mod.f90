@@ -50,11 +50,14 @@ contains
 
 subroutine init_design(this, dimensions, dr, sigma, grid_Ndims)
 
-    class(TDesign) :: this
-    integer        :: dimensions
-    real(dp)       :: dr
-    real(dp)       :: sigma
-    integer        :: grid_Ndims(3)
+    class(TDesign), intent(inout) :: this
+    integer       , intent(in)    :: dimensions
+    real(dp)      , intent(in)    :: dr
+    real(dp)      , intent(in)    :: sigma
+    integer       , intent(in)    :: grid_Ndims(3)
+    
+    integer       :: i, j, k
+    real(dp)      :: ker_sum
 
     this%dimensions = dimensions
     this%nx = grid_Ndims(1)
@@ -92,6 +95,35 @@ subroutine init_design(this, dimensions, dr, sigma, grid_Ndims)
     call allocate_multidim(array=this%ker_mat, dim=dimensions, i_max=this%n_ker, i_min=-this%n_ker, &
                            j_max=this%n_ker, j_min=-this%n_ker, k_max=this%n_ker, k_min=-this%n_ker)
 
+
+    ker_sum = 0.0_dp
+    select case (dimensions)
+    case (1)
+        do i = -this%n_ker, this%n_ker
+            this%ker_mat(i,1,1) = EXP(-REAL(i**2, kind=dp)/(2.0_dp*sigma**2))
+            ker_sum = ker_sum + this%ker_mat(i,1,1)
+        end do
+        this%ker_mat = this%ker_mat / ker_sum
+    case (2)
+        do i = -this%n_ker, this%n_ker
+        do j = -this%n_ker, this%n_ker
+            this%ker_mat(i,j,1) = EXP(-REAL(i**2+j**2, kind=dp)/(2.0_dp*sigma**2))
+            ker_sum = ker_sum + this%ker_mat(i,j,1)
+        end do
+        end do
+        this%ker_mat = this%ker_mat / ker_sum
+    case (3)
+        do i = -this%n_ker, this%n_ker
+        do j = -this%n_ker, this%n_ker
+        do k = -this%n_ker, this%n_ker
+            this%ker_mat(i,j,k) = EXP(-REAL(i**2+j**2+k**2, kind=dp)/(2.0_dp*sigma**2))
+            ker_sum = ker_sum + this%ker_mat(i,j,k)
+        end do
+        end do
+        end do
+        this%ker_mat = this%ker_mat / ker_sum
+    end select
+
     this%rho        = 0.0_dp
     this%rho_conv   = 0.0_dp
     this%rho_old    = 0.0_dp
@@ -102,7 +134,7 @@ end subroutine init_design
 !###################################################################################################
 
 subroutine kill_design(this)
-    class(TDesign) :: this
+    class(TDesign), intent(inout) :: this
 
     if (allocated(this%ker_mat))     deallocate(this%ker_mat)
     if (allocated(this%rho))         deallocate(this%rho)
@@ -120,11 +152,11 @@ end subroutine kill_design
 
 subroutine collect_opt_regions(this, opt_region_i, rho_init, p_id, p_tot)
 
-    class(TDesign) :: this
-    logical        :: opt_region_i(:,:,:)
-    real(dp)       :: rho_init
-    integer        :: p_id
-    integer        :: p_tot
+    class(TDesign), intent(inout) :: this
+    logical       , intent(in)    :: opt_region_i(:,:,:)
+    real(dp)      , intent(in)    :: rho_init
+    integer       , intent(in)    :: p_id
+    integer       , intent(in)    :: p_tot
 
     integer :: i, j, k
 
@@ -173,10 +205,10 @@ end subroutine collect_opt_regions
 
 subroutine collect_FOM(this, w_p, p, n_opt_problems)
 
-    class(TDesign)  :: this
-    real(dp)        :: w_p
-    integer         :: p
-    integer         :: n_opt_problems
+    class(TDesign), intent(inout) :: this
+    real(dp)      , intent(in)    :: w_p
+    integer       , intent(in)    :: p
+    integer       , intent(in)    :: n_opt_problems
 
     real(dp) :: fom_loc = 0.0_dp
     real(dp) :: fom_sum = 0.0_dp
@@ -204,14 +236,24 @@ end subroutine collect_FOM
 
 subroutine collect_gradients(this, grad_in, p, n_opt_problems)
 
-    class(TDesign)  :: this
-    real(dp)        :: grad_in(:,:,:)
-    integer         :: p
-    integer         :: n_opt_problems
+    class(TDesign), intent(inout) :: this
+    real(dp)      , intent(in)    :: grad_in(:,:,:)
+    integer       , intent(in)    :: p
+    integer       , intent(in)    :: n_opt_problems
 
     if (p == 1) this%grad = 0.0_dp
 
-    this%grad = this%grad + grad_in
+    select case (this%dimensions)
+    case (1)
+        this%grad(1:this%nx,1,1) = this%grad(1:this%nx,1,1) + grad_in(1:this%nx,1,1)
+
+    case (2)
+        this%grad(1:this%nx,1:this%ny,1) = this%grad(1:this%nx,1:this%ny,1) + &
+                                           grad_in(1:this%nx,1:this%ny,1)
+    case (3)
+        this%grad(1:this%nx,1:this%ny,1:this%nz) = this%grad(1:this%nx,1:this%ny,1:this%nz) + &
+                                                   grad_in(1:this%nx,1:this%ny,1:this%nz)
+    end select
 
     if (p == n_opt_problems) then
         this%grad = 2.0_dp* this%fom *this%grad
@@ -227,7 +269,7 @@ end subroutine collect_gradients
 
 subroutine apply_kernel_on_rho(this)
 
-    class(TDesign) :: this
+    class(TDesign), intent(inout) :: this
 
     integer :: i, j, k, ii, jj, kk
 
@@ -281,7 +323,7 @@ end subroutine apply_kernel_on_rho
 
 subroutine apply_kernel_on_grad(this)
 
-    class(TDesign) :: this
+    class(TDesign), intent(inout) :: this
 
     integer :: i, j, k, ii, jj, kk
 
@@ -293,10 +335,11 @@ subroutine apply_kernel_on_grad(this)
         do ii = -this%n_ker, this%n_ker
             if (this%opt_region(i+ii,1,1)) then
                 this%grad_conv(i+ii,1,1) = this%grad_conv(i+ii,1,1) + &
-                                       this%ker_mat(-ii, 1, 1)*this%grad(i,1,1)
+                                       this%ker_mat(ii, 1, 1)*this%grad(i,1,1)
             end if
         end do
         end do
+
     case (2)
         do i = 1, this%nx
         do j = 1, this%ny
@@ -304,7 +347,7 @@ subroutine apply_kernel_on_grad(this)
         do jj = -this%n_ker, this%n_ker
             if (this%opt_region(i+ii,j+jj,1)) then
                 this%grad_conv(i+ii,j+jj,1) = this%grad_conv(i+ii,j+jj,1) + &
-                    this%ker_mat(-ii,-jj,1)*this%grad(i,j,1)
+                    this%ker_mat(ii,jj,1)*this%grad(i,j,1)
             end if
         end do
         end do
@@ -319,7 +362,7 @@ subroutine apply_kernel_on_grad(this)
         do kk = -this%n_ker, this%n_ker
             if (this%opt_region(i+ii,j+jj,k+kk)) then
                 this%grad_conv(i+ii,j+jj,k+kk) = this%grad_conv(i+ii,j+jj,k+kk) + &
-                    this%ker_mat(-ii,-jj,-kk)*this%grad(i,j,k)
+                    this%ker_mat(ii,jj,kk)*this%grad(i,j,k)
             end if
         end do
         end do
@@ -335,7 +378,7 @@ end subroutine apply_kernel_on_grad
 
 subroutine displace_rho(this)
 
-    class(TDesign) :: this
+    class(TDesign), intent(inout) :: this
 
     integer  :: ierr
     real(dp) :: gamma
@@ -345,6 +388,8 @@ subroutine displace_rho(this)
     real(dp) :: nume
     real(dp) :: norm_loc
     real(dp) :: norm_global
+
+    integer :: i
 
     deno_loc  = SUM(this%grad_old*this%grad_old)
     nume_loc = SUM((this%grad_conv - this%grad_old)*this%grad_conv)  
@@ -394,7 +439,7 @@ end subroutine displace_rho
 
 subroutine reset_rho_one_step_back(this)
 
-    class(TDesign) :: this
+    class(TDesign), intent(inout) :: this
 
     select case (this%dimensions)
     case (1)
@@ -413,7 +458,7 @@ end subroutine reset_rho_one_step_back
 
 subroutine reset_grad(this)
 
-    class(TDesign) :: this
+    class(TDesign), intent(inout) :: this
 
     select case (this%dimensions)
     case (1)
@@ -432,7 +477,7 @@ end subroutine reset_grad
 
 subroutine update_rho(this)
 
-    class(TDesign) :: this
+    class(TDesign), intent(inout) :: this
 
     select case (this%dimensions)
     case (1)
@@ -449,7 +494,7 @@ end subroutine update_rho
 
 subroutine update_grad(this)
 
-    class(TDesign) :: this
+    class(TDesign), intent(inout) :: this
 
     select case (this%dimensions)
     case (1)

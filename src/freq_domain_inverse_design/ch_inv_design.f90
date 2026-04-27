@@ -36,6 +36,7 @@ program ch_inv_design
     integer         :: iter_step
     integer         :: n_beta_steps
     integer         :: n_delta_rho_steps
+    integer         :: n_accuracy_der
     integer         :: i, j, k, p
     
     real(dp)        :: fom, fom_old
@@ -54,7 +55,7 @@ program ch_inv_design
     call read_input_file(boundaries, restart, converge_optimization, n_opt_problems,        &
                          max_iter_steps, dimensions, n_pml, grid_Ndims, dr, freq_list,      &
                          eps_Re, eps_Im, delta_rho, beta, eta, rho_init, sigma_rho, mpi_dims, &
-                         n_delta_rho_steps, n_beta_steps, bicgstab_max_iter, bicgstab_L_term,    &
+                         n_delta_rho_steps, n_beta_steps, n_accuracy_der, bicgstab_max_iter, bicgstab_L_term,    &
                          bicgstab_tol)
 
     mpi_nprocs = mpi_dims(1) * mpi_dims(2) * mpi_dims(3)
@@ -66,18 +67,20 @@ program ch_inv_design
 
     do i = 1, n_opt_problems
         call opt_problems(i)%init_optprblm(i, dimensions, dr, freq_list(i), eps_Re(i), &
-                                           eps_Im(i), boundaries, restart, n_pml,       &
-                                           grid_Ndims, mpi_cart_comm, mpi_coords, mpi_dims)
+                                           eps_Im(i), eta, boundaries, restart, n_pml,       &
+                                           grid_Ndims, n_accuracy_der, mpi_cart_comm, mpi_coords, mpi_dims)
         opt_problems(i)%beta_rho = beta(1)
     end do
 
     call design%init_design(dimensions, dr, sigma_rho, grid_Ndims)
 
+
     do i = 1, n_opt_problems
         call design%collect_opt_regions(opt_problems(i)%opt_region, rho_init, i, n_opt_problems)
     end do
 
-    call init_BICGStab_L_variables(grid_Ndims, dimensions, bicgstab_L_term)
+
+    call init_BICGStab_L_variables(grid_Ndims, dimensions, n_accuracy_der, bicgstab_L_term)
 
     !The initial fields are calculated using only the input permittivity.
     !rho_init is ignored in this step if restart is false.
@@ -89,12 +92,11 @@ program ch_inv_design
 
         call opt_problems(p)%update_targets()
 
-
         call opt_problems(p)%solve_adjoint(bicgstab_tol, bicgstab_max_iter, bicgstab_L_term, &
                                            0.0_dp, -1, converged_adjoint)
         
         call opt_problems(p)%update_fields()
-
+        
         call opt_problems(p)%update_permittivity(design%rho)
         
     end do
@@ -117,7 +119,7 @@ program ch_inv_design
 
     end do
 
-    fom = design%fom**2
+    fom     = design%fom**2
     fom_old = fom
 
     iterate_optimization = .true.
@@ -125,6 +127,8 @@ program ch_inv_design
     k = 1
     !Init optimization loop. --------------------------------------------------!
     do while(iterate_optimization .and. iter_step <= max_iter_steps)
+        
+        write(*,*) iter_step, fom
         !Calculate the gradient ---------------------------------------!
         do p = 1, n_opt_problems
             opt_problems(p)%beta_rho = beta(k)
@@ -139,7 +143,7 @@ program ch_inv_design
         design%drho = delta_rho(j)
         change_delta_rho = .true.
         do while(change_delta_rho)
-            
+          
             call design%displace_rho()
             call design%apply_kernel_on_rho()
 
@@ -224,12 +228,17 @@ program ch_inv_design
 
             call design%update_grad()
             call design%update_rho()
+            fom_old = fom
 
         end if
         iter_step = iter_step + 1
 
     end do
     ! End of optimization loop. --------------------------------------------------!
+
+    do i = 1, opt_problems(1)%nx
+        write(777,*) i, REAL(opt_problems(1)%eps_r%mat1D(i))
+    end do
 
     call kill_BICGStab_L_variables()
 

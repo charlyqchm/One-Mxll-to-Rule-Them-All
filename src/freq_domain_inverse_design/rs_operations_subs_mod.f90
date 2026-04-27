@@ -18,7 +18,7 @@ subroutine linear_op_V1_aV2(vec1, vec2, a, vec_out)
 
     class(TRSvec), intent(in) :: vec1
     class(TRSvec), intent(in) :: vec2
-    class(TRSvec), intent(out) :: vec_out
+    class(TRSvec), intent(inout) :: vec_out
     complex(dp)       , intent(in) :: a
 
     select type(vec1)
@@ -27,6 +27,11 @@ subroutine linear_op_V1_aV2(vec1, vec2, a, vec_out)
     type is (TRSvec_1D)
     select type(vec_out)
     type is (TRSvec_1D)
+
+        vec_out%nx         = vec1%nx
+        vec_out%dimensions = vec1%dimensions
+        vec_out%freq       = vec1%freq
+        vec_out%dr         = vec1%dr
     
         vec_out%pl_x = vec1%pl_x + a * vec2%pl_x
         vec_out%pl_y = vec1%pl_y + a * vec2%pl_y
@@ -36,11 +41,18 @@ subroutine linear_op_V1_aV2(vec1, vec2, a, vec_out)
     end select
     end select
 
+
     type is (TRSvec_2D)
     select type(vec2)
     type is (TRSvec_2D)
     select type(vec_out)
     type is (TRSvec_2D)
+
+        vec_out%nx         = vec1%nx
+        vec_out%ny         = vec1%ny
+        vec_out%dimensions = vec1%dimensions
+        vec_out%freq       = vec1%freq
+        vec_out%dr         = vec1%dr
 
         vec_out%pl_x = vec1%pl_x + a * vec2%pl_x
         vec_out%pl_y = vec1%pl_y + a * vec2%pl_y
@@ -57,6 +69,13 @@ subroutine linear_op_V1_aV2(vec1, vec2, a, vec_out)
     type is (TRSvec_3D)
     select type(vec_out)
     type is (TRSvec_3D)
+
+        vec_out%nx         = vec1%nx
+        vec_out%ny         = vec1%ny
+        vec_out%nz         = vec1%nz
+        vec_out%dimensions = vec1%dimensions
+        vec_out%freq       = vec1%freq
+        vec_out%dr         = vec1%dr
 
         vec_out%pl_x = vec1%pl_x + a * vec2%pl_x
         vec_out%pl_y = vec1%pl_y + a * vec2%pl_y
@@ -182,9 +201,12 @@ subroutine dot_product_V1_V2(vec1, vec2, dot_prod)
     class(TRSvec), intent(in) :: vec2
     complex(dp)  , intent(out) :: dot_prod
 
-    integer     :: ierr
+    integer     :: nx, ny, nz
     complex(dp) :: local_dot_prod
+#ifdef USE_MPI
+    integer     :: ierr
     complex(dp) :: global_dot_prod
+#endif
 
     dot_prod = 0.0_dp
 
@@ -192,34 +214,45 @@ subroutine dot_product_V1_V2(vec1, vec2, dot_prod)
     type is (TRSvec_1D)
     select type(vec2)
     type is (TRSvec_1D)
-        local_dot_prod = SUM(DCONJG(vec1%pl_x)*vec2%pl_x)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%pl_y)*vec2%pl_y)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_x)*vec2%mi_x)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_y)*vec2%mi_y)
+
+        nx = vec1%nx
+
+        local_dot_prod = SUM(DCONJG(vec1%pl_x(1:nx))*vec2%pl_x(1:nx))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%pl_y(1:nx))*vec2%pl_y(1:nx))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_x(1:nx))*vec2%mi_x(1:nx))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_y(1:nx))*vec2%mi_y(1:nx))
 
     end select
 
     type is (TRSvec_2D)
     select type(vec2)
     type is (TRSvec_2D)
-        local_dot_prod = SUM(DCONJG(vec1%pl_x)*vec2%pl_x)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%pl_y)*vec2%pl_y)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%pl_z)*vec2%pl_z)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_x)*vec2%mi_x)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_y)*vec2%mi_y)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_z)*vec2%mi_z)
+
+        nx = vec1%nx
+        ny = vec1%ny
+
+        local_dot_prod = SUM(DCONJG(vec1%pl_x(1:nx,1:ny))*vec2%pl_x(1:nx,1:ny))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%pl_y(1:nx,1:ny))*vec2%pl_y(1:nx,1:ny))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%pl_z(1:nx,1:ny))*vec2%pl_z(1:nx,1:ny))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_x(1:nx,1:ny))*vec2%mi_x(1:nx,1:ny))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_y(1:nx,1:ny))*vec2%mi_y(1:nx,1:ny))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_z(1:nx,1:ny))*vec2%mi_z(1:nx,1:ny))
 
     end select
 
     type is (TRSvec_3D)
     select type(vec2)
     type is (TRSvec_3D)
-        local_dot_prod = SUM(DCONJG(vec1%pl_x)*vec2%pl_x)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%pl_y)*vec2%pl_y)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%pl_z)*vec2%pl_z)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_x)*vec2%mi_x)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_y)*vec2%mi_y)
-        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_z)*vec2%mi_z)
+        nx = vec1%nx
+        ny = vec1%ny
+        nz = vec1%nz
+
+        local_dot_prod = SUM(DCONJG(vec1%pl_x(1:nx,1:ny,1:nz))*vec2%pl_x(1:nx,1:ny,1:nz))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%pl_y(1:nx,1:ny,1:nz))*vec2%pl_y(1:nx,1:ny,1:nz))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%pl_z(1:nx,1:ny,1:nz))*vec2%pl_z(1:nx,1:ny,1:nz))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_x(1:nx,1:ny,1:nz))*vec2%mi_x(1:nx,1:ny,1:nz))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_y(1:nx,1:ny,1:nz))*vec2%mi_y(1:nx,1:ny,1:nz))
+        local_dot_prod = local_dot_prod + SUM(DCONJG(vec1%mi_z(1:nx,1:ny,1:nz))*vec2%mi_z(1:nx,1:ny,1:nz))
 
     end select
 
@@ -289,7 +322,7 @@ end subroutine copy_V2_on_V1
 subroutine self_product_aV1(vec1, a)
 
     class(TRSvec), intent(inout) :: vec1
-    real(dp)     , intent(in)    :: a
+    complex(dp)  , intent(in)    :: a
 
     select type(vec1)
     type is (TRSvec_1D)
@@ -321,5 +354,42 @@ subroutine self_product_aV1(vec1, a)
     end select
 
 end subroutine self_product_aV1
+
+!###################################################################################################
+subroutine reset_V1_to_zero(vec1)
+
+    class(TRSvec), intent(inout) :: vec1
+
+    select type(vec1)
+    type is (TRSvec_1D)
+
+        vec1%pl_x = Z_0
+        vec1%pl_y = Z_0
+        vec1%mi_x = Z_0
+        vec1%mi_y = Z_0
+    
+    type is (TRSvec_2D)
+
+        vec1%pl_x = Z_0
+        vec1%pl_y = Z_0
+        vec1%pl_z = Z_0
+        vec1%mi_x = Z_0
+        vec1%mi_y = Z_0
+        vec1%mi_z = Z_0
+
+    type is (TRSvec_3D)
+
+        vec1%pl_x = Z_0
+        vec1%pl_y = Z_0
+        vec1%pl_z = Z_0
+        vec1%mi_x = Z_0
+        vec1%mi_y = Z_0
+        vec1%mi_z = Z_0
+    
+    end select
+
+end subroutine reset_V1_to_zero
+
+!###################################################################################################
 
 end module rs_operations_subs_mod

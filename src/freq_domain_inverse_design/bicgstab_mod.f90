@@ -23,15 +23,29 @@ module bicgstab_mod
 contains
 !###################################################################################################
 
-subroutine init_BICGStab_L_variables(grid_Ndims, dimensionsm, L_term)
+subroutine init_BICGStab_L_variables(grid_Ndims, dimensions, n_der, L_term)
 
     integer , intent(in) :: grid_Ndims(3)
-    integer , intent(in) :: dimensionsm
+    integer , intent(in) :: dimensions
+    integer , intent(in) :: n_der
     integer , intent(in) :: L_term
 
-    r0_vec = rs_vec_factory(dimensionsm)
-    r_vec  = rs_vec_factory_array(dim= dimensionsm, n_max= L_term, n_min= 0)
-    u_vec  = rs_vec_factory_array(dim= dimensionsm, n_max= L_term, n_min= 0)
+    integer :: i
+
+    if (allocated(r0_vec)) deallocate(r0_vec)
+    if (allocated(r_vec))  deallocate(r_vec)
+    if (allocated(u_vec))  deallocate(u_vec)
+
+    allocate(r0_vec, mold=rs_vec_factory(dimensions))
+    allocate(r_vec(0:L_term), mold=rs_vec_factory(dimensions))
+    allocate(u_vec(0:L_term), mold=rs_vec_factory(dimensions))
+
+    call r0_vec%init(grid_Ndims, 0.0_dp, dimensions, 0.0_dp, n_der)
+
+    do i = 0, L_term
+        call r_vec(i)%init(grid_Ndims, 0.0_dp, dimensions, 0.0_dp, n_der)
+        call u_vec(i)%init(grid_Ndims, 0.0_dp, dimensions, 0.0_dp, n_der)
+    end do
 
     if (.not. allocated(tau))    allocate(tau(L_term-1, L_term))
     if (.not. allocated(gam))    allocate(gam(L_term+1))
@@ -82,7 +96,8 @@ subroutine BICGStab_L(A_op, f_vec, j_vec, f_vec_out, Af_vec, eps_r, converged, t
     complex(dp) :: beta
     complex(dp) :: dot_product
     integer     :: n, l, i
-    real(dp)    :: norm_t 
+    real(dp)    :: norm_t
+    real(dp)    :: norm_inv 
     real(dp)    :: err_r
 
     omega = Z_ONE
@@ -90,6 +105,15 @@ subroutine BICGStab_L(A_op, f_vec, j_vec, f_vec_out, Af_vec, eps_r, converged, t
     rho_1 = Z_ONE
     alpha = Z_ONE
     sig   = Z_0
+
+    call reset_V1_to_zero(r0_vec)
+
+    do i = 0, L_iter
+        call reset_V1_to_zero(r_vec(i))
+        call reset_V1_to_zero(u_vec(i))
+    end do
+
+    call copy_V2_on_V1(f_vec_out, f_vec)
 
     call A_op%apply_operator(f_vec, Af_vec, eps_r, transpose)
 
@@ -101,7 +125,8 @@ subroutine BICGStab_L(A_op, f_vec, j_vec, f_vec_out, Af_vec, eps_r, converged, t
 
     norm_t = DSQRT(DBLE(dot_product))
 
-    call self_product_aV1(r0_vec, 1.0_dp/norm_t)
+    norm_inv = 1.0_dp/norm_t
+    call self_product_aV1(r0_vec, Z_ONE*norm_inv)
 
     call dot_product_V1_V2(j_vec, j_vec, dot_product)
     norm_t = DSQRT(DBLE(dot_product))
@@ -109,6 +134,7 @@ subroutine BICGStab_L(A_op, f_vec, j_vec, f_vec_out, Af_vec, eps_r, converged, t
     err_r = 1.0_dp
     converged = .false.
 
+    n = 0
     !Beginning of the BICGStab iteration---------------------------------------!
     do while((n <= n_max) .and. (.not. converged))
 
@@ -146,7 +172,7 @@ subroutine BICGStab_L(A_op, f_vec, j_vec, f_vec_out, Af_vec, eps_r, converged, t
 
         !Beginning of the L-term BiCGStab iteration to compute gammas and tau!
         do l = 1, L_iter
-            do i = 0, l-1
+            do i = 1, l-1
 
                 call dot_product_V1_V2(r_vec(i), r_vec(l), dot_product)
 
@@ -173,11 +199,11 @@ subroutine BICGStab_L(A_op, f_vec, j_vec, f_vec_out, Af_vec, eps_r, converged, t
         do l = L_iter-1, 1, -1
             gam(l) = gam_p(l)
             do i = l+1, L_iter
-                gam(l) = gam(l) + tau(l,i)*gam(i)
+                gam(l) = gam(l) - tau(l,i)*gam(i)
             end do
         end do
 
-        do l =1, L_iter
+        do l =1, L_iter-1
             gam_pp(l) = gam(l+1)
             do i = l+1, L_iter-1
                 gam_pp(l) = gam_pp(l) + tau(l,i)*gam(i+1)
