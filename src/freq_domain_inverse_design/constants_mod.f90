@@ -42,4 +42,13 @@ module constants_mod
     Abs_Ey_TARGET   = 11,               &
     Abs_Ez_TARGET   = 12
 
+    integer, public, parameter :: &
+    PRINT_NONE = 0,               &
+    PRINT_Ex   = 1,               &
+    PRINT_Ey   = 2,               &
+    PRINT_Ez   = 3,               &
+    PRINT_Hx   = 4,               &
+    PRINT_Hy   = 5,               &
+    PRINT_Hz   = 6
+
 end module constants_mod

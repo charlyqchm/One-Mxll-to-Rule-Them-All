@@ -6,6 +6,10 @@ module input_mod
     !Boundaries of the simulation box.
     !This can be: "closed", "periodic", "pml"
     character(len=10) :: mxll_boundaries(3) = "closed"
+
+    !List of names of the fields to print in the output files.
+    !This can be: "Ex", "Ey", "Ez", "Hx", "Hy", "Hz"
+    character(len=10)  :: mxll_print_field_list(6) = "none" 
     
     !Number of dimensions of the simulation box. This can be 1, 2 or 3.
     integer           :: mxll_dimensions = 1
@@ -45,6 +49,9 @@ module input_mod
 
     !If true, the optimization will restart from a restart file.
     logical           :: design_restart = .false.
+
+    !If true, the optimization will print restart files before changing beta.
+    logical           :: design_print_restart = .false.
 
     !List of delta_rho values to scan in the optimization. Being rho
     !the design variable and delta_rho the step size of the optimization.
@@ -87,17 +94,19 @@ subroutine read_input_file(boundaries, restart, converge_optimization, n_opt_pro
                            max_iter_steps, dimensions, n_pml, grid_Ndims, dr, freq_list,      &
                            eps_Re, eps_Im, delta_rho, beta, eta, rho_init, sigma_rho, mpi_dims, &
                            n_delta_rho_steps, n_beta_steps, n_accuracy_der, bicgstab_max_iter, &
-                           bicgstab_l_term, bicgstab_tol)
+                           bicgstab_l_term, bicgstab_tol, print_field_list, print_restart)
     
     integer   , intent(out) :: boundaries(3)
     logical   , intent(out) :: restart
     logical   , intent(out) :: converge_optimization
+    logical   , intent(out) :: print_restart
     integer   , intent(out) :: n_opt_problems
     integer   , intent(out) :: max_iter_steps
     integer   , intent(out) :: dimensions
     integer   , intent(out) :: n_pml
     integer   , intent(out) :: grid_Ndims(3)
     integer   , intent(out) :: n_accuracy_der
+    integer   , intent(out) :: print_field_list(6)
     real(dp)  , intent(out) :: dr
     real(dp)  , intent(out) :: freq_list(100)
     real(dp)  , intent(out) :: eps_Re(100)
@@ -119,11 +128,13 @@ subroutine read_input_file(boundaries, restart, converge_optimization, n_opt_pro
     integer :: i
 
     namelist /OMxRTA/ mxll_boundaries, mxll_dimensions, mxll_n_pml, mxll_box_size, mxll_dr, &
-                      mxll_freq_list, mxll_eps_Re, mxll_eps_Im, design_n_opt_problems,      &
-                      design_max_iter_steps, design_converge_optimization, design_restart,  &
-                      design_delta_rho, design_beta, design_eta, design_rho_init,           &
-                      design_sigma_rho,    design_bicgstab_max_iter, design_bicgstab_l_term,&
-                      design_bicgstab_tol, mpi_procs_per_axis, mxll_accuracy_derivatives
+                      mxll_freq_list, mxll_eps_Re, mxll_eps_Im, mxll_print_field_list,      &
+                      design_n_opt_problems, design_max_iter_steps,                         &
+                      design_converge_optimization, design_restart,  design_delta_rho,      &
+                      design_beta, design_eta, design_rho_init, design_sigma_rho,           &
+                      design_bicgstab_max_iter, design_bicgstab_l_term,                     &
+                      design_bicgstab_tol, mpi_procs_per_axis, mxll_accuracy_derivatives,   &
+                      design_print_restart
 
     ! Check whether file exists.
     inquire (file="inp", iostat=ierr)
@@ -175,6 +186,7 @@ subroutine read_input_file(boundaries, restart, converge_optimization, n_opt_pro
     max_iter_steps        = design_max_iter_steps
     converge_optimization = design_converge_optimization
     restart               = design_restart
+    print_restart         = design_print_restart
     delta_rho             = design_delta_rho
     beta                  = design_beta
     eta                   = design_eta
@@ -220,6 +232,44 @@ subroutine read_input_file(boundaries, restart, converge_optimization, n_opt_pro
                mxll_accuracy_derivatives
         error stop
     end if
+
+    do i = 1, 6
+        select case (mxll_print_field_list(i))
+        case ("none")
+            print_field_list(i) = PRINT_NONE
+        case ("Ex")
+            print_field_list(i) = PRINT_Ex 
+        case ("Ey")
+            print_field_list(i) = PRINT_Ey
+            if (mxll_dimensions == 1) then
+                write (*, '("Warning: field Ey cannot be printed in 1D simulation box")')
+                print_field_list(i) = PRINT_NONE
+            end if
+        case ("Ez")
+            print_field_list(i) = PRINT_Ez
+            if (mxll_dimensions == 1) then
+                write (*, '("Warning: field Ez cannot be printed in 1D simulation box")')
+                print_field_list(i) = PRINT_NONE
+            end if
+        case ("Hx")
+            print_field_list(i) = PRINT_Hx
+            if (mxll_dimensions == 1) then
+                write (*, '("Warning: field Hx cannot be printed in 1D simulation box")')
+                print_field_list(i) = PRINT_NONE
+            end if
+        case ("Hy")
+            print_field_list(i) = PRINT_Hy
+        case ("Hz")
+            print_field_list(i) = PRINT_Hz
+            if (mxll_dimensions == 1) then
+                write (*, '("Warning: field Hz cannot be printed in 1D simulation box")')
+                print_field_list(i) = PRINT_NONE
+            end if
+        case default
+            write (*, '("Error: invalid field name to print in axis ", a)') mxll_print_field_list(i) 
+            error stop
+        end select
+    end do
 
 end subroutine read_input_file
 

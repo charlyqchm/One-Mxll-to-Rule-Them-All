@@ -130,6 +130,7 @@ subroutine BICGStab_L(A_op, f_vec, j_vec, f_vec_out, Af_vec, eps_r, converged, t
 
     call dot_product_V1_V2(j_vec, j_vec, dot_product)
     norm_t = DSQRT(DBLE(dot_product))
+    
 
     err_r = 1.0_dp
     converged = .false.
@@ -164,6 +165,8 @@ subroutine BICGStab_L(A_op, f_vec, j_vec, f_vec_out, Af_vec, eps_r, converged, t
             end do
 
             call A_op%apply_operator(r_vec(l), r_vec(l+1), eps_r, transpose)
+
+            call dot_product_V1_V2(r_vec(l+1), r_vec(l+1), dot_product)
 
             call self_linear_op_V1_aV2(f_vec_out, u_vec(0), alpha)
 

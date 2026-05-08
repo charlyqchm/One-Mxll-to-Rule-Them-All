@@ -20,6 +20,8 @@ subroutine linear_op_V1_aV2(vec1, vec2, a, vec_out)
     class(TRSvec), intent(in) :: vec2
     class(TRSvec), intent(inout) :: vec_out
     complex(dp)       , intent(in) :: a
+    
+    integer :: nx, ny, nz
 
     select type(vec1)
     type is (TRSvec_1D)
@@ -32,11 +34,13 @@ subroutine linear_op_V1_aV2(vec1, vec2, a, vec_out)
         vec_out%dimensions = vec1%dimensions
         vec_out%freq       = vec1%freq
         vec_out%dr         = vec1%dr
-    
-        vec_out%pl_x = vec1%pl_x + a * vec2%pl_x
-        vec_out%pl_y = vec1%pl_y + a * vec2%pl_y
-        vec_out%mi_x = vec1%mi_x + a * vec2%mi_x
-        vec_out%mi_y = vec1%mi_y + a * vec2%mi_y
+
+        nx = vec1%nx
+
+        vec_out%pl_x(1:nx) = vec1%pl_x(1:nx) + a * vec2%pl_x(1:nx)
+        vec_out%pl_y(1:nx) = vec1%pl_y(1:nx) + a * vec2%pl_y(1:nx)
+        vec_out%mi_x(1:nx) = vec1%mi_x(1:nx) + a * vec2%mi_x(1:nx)
+        vec_out%mi_y(1:nx) = vec1%mi_y(1:nx) + a * vec2%mi_y(1:nx)
 
     end select
     end select
@@ -54,12 +58,15 @@ subroutine linear_op_V1_aV2(vec1, vec2, a, vec_out)
         vec_out%freq       = vec1%freq
         vec_out%dr         = vec1%dr
 
-        vec_out%pl_x = vec1%pl_x + a * vec2%pl_x
-        vec_out%pl_y = vec1%pl_y + a * vec2%pl_y
-        vec_out%pl_z = vec1%pl_z + a * vec2%pl_z
-        vec_out%mi_x = vec1%mi_x + a * vec2%mi_x
-        vec_out%mi_y = vec1%mi_y + a * vec2%mi_y
-        vec_out%mi_z = vec1%mi_z + a * vec2%mi_z
+        nx = vec1%nx
+        ny = vec1%ny
+
+        vec_out%pl_x(1:nx,1:ny) = vec1%pl_x(1:nx,1:ny) + a * vec2%pl_x(1:nx,1:ny)
+        vec_out%pl_y(1:nx,1:ny) = vec1%pl_y(1:nx,1:ny) + a * vec2%pl_y(1:nx,1:ny)
+        vec_out%pl_z(1:nx,1:ny) = vec1%pl_z(1:nx,1:ny) + a * vec2%pl_z(1:nx,1:ny)
+        vec_out%mi_x(1:nx,1:ny) = vec1%mi_x(1:nx,1:ny) + a * vec2%mi_x(1:nx,1:ny)
+        vec_out%mi_y(1:nx,1:ny) = vec1%mi_y(1:nx,1:ny) + a * vec2%mi_y(1:nx,1:ny)
+        vec_out%mi_z(1:nx,1:ny) = vec1%mi_z(1:nx,1:ny) + a * vec2%mi_z(1:nx,1:ny)
 
     end select
     end select
@@ -77,12 +84,16 @@ subroutine linear_op_V1_aV2(vec1, vec2, a, vec_out)
         vec_out%freq       = vec1%freq
         vec_out%dr         = vec1%dr
 
-        vec_out%pl_x = vec1%pl_x + a * vec2%pl_x
-        vec_out%pl_y = vec1%pl_y + a * vec2%pl_y
-        vec_out%pl_z = vec1%pl_z + a * vec2%pl_z
-        vec_out%mi_x = vec1%mi_x + a * vec2%mi_x
-        vec_out%mi_y = vec1%mi_y + a * vec2%mi_y
-        vec_out%mi_z = vec1%mi_z + a * vec2%mi_z
+        nx = vec1%nx
+        ny = vec1%ny
+        nz = vec1%nz
+
+        vec_out%pl_x(1:nx,1:ny,1:nz) = vec1%pl_x(1:nx,1:ny,1:nz) + a * vec2%pl_x(1:nx,1:ny,1:nz)
+        vec_out%pl_y(1:nx,1:ny,1:nz) = vec1%pl_y(1:nx,1:ny,1:nz) + a * vec2%pl_y(1:nx,1:ny,1:nz)
+        vec_out%pl_z(1:nx,1:ny,1:nz) = vec1%pl_z(1:nx,1:ny,1:nz) + a * vec2%pl_z(1:nx,1:ny,1:nz)
+        vec_out%mi_x(1:nx,1:ny,1:nz) = vec1%mi_x(1:nx,1:ny,1:nz) + a * vec2%mi_x(1:nx,1:ny,1:nz)
+        vec_out%mi_y(1:nx,1:ny,1:nz) = vec1%mi_y(1:nx,1:ny,1:nz) + a * vec2%mi_y(1:nx,1:ny,1:nz)
+        vec_out%mi_z(1:nx,1:ny,1:nz) = vec1%mi_z(1:nx,1:ny,1:nz) + a * vec2%mi_z(1:nx,1:ny,1:nz)
     
     end select
     end select
@@ -99,16 +110,20 @@ subroutine self_linear_op_V1_aV2(vec1, vec2, a)
     class(TRSvec), intent(inout) :: vec1
     class(TRSvec), intent(in) :: vec2
     complex(dp)       , intent(in) :: a
+    
+    integer :: nx, ny, nz
 
     select type(vec1)
     type is (TRSvec_1D)
     select type(vec2)
     type is (TRSvec_1D)
 
-        vec1%pl_x = vec1%pl_x + a * vec2%pl_x
-        vec1%pl_y = vec1%pl_y + a * vec2%pl_y
-        vec1%mi_x = vec1%mi_x + a * vec2%mi_x
-        vec1%mi_y = vec1%mi_y + a * vec2%mi_y
+        nx = vec1%nx
+
+        vec1%pl_x(1:nx) = vec1%pl_x(1:nx) + a * vec2%pl_x(1:nx)
+        vec1%pl_y(1:nx) = vec1%pl_y(1:nx) + a * vec2%pl_y(1:nx)
+        vec1%mi_x(1:nx) = vec1%mi_x(1:nx) + a * vec2%mi_x(1:nx)
+        vec1%mi_y(1:nx) = vec1%mi_y(1:nx) + a * vec2%mi_y(1:nx)
 
     end select
 
@@ -116,12 +131,15 @@ subroutine self_linear_op_V1_aV2(vec1, vec2, a)
     select type(vec2)
     type is (TRSvec_2D)
 
-        vec1%pl_x = vec1%pl_x + a * vec2%pl_x
-        vec1%pl_y = vec1%pl_y + a * vec2%pl_y
-        vec1%pl_z = vec1%pl_z + a * vec2%pl_z
-        vec1%mi_x = vec1%mi_x + a * vec2%mi_x
-        vec1%mi_y = vec1%mi_y + a * vec2%mi_y
-        vec1%mi_z = vec1%mi_z + a * vec2%mi_z
+        nx = vec1%nx
+        ny = vec1%ny
+
+        vec1%pl_x(1:nx,1:ny) = vec1%pl_x(1:nx,1:ny) + a * vec2%pl_x(1:nx,1:ny)
+        vec1%pl_y(1:nx,1:ny) = vec1%pl_y(1:nx,1:ny) + a * vec2%pl_y(1:nx,1:ny)
+        vec1%pl_z(1:nx,1:ny) = vec1%pl_z(1:nx,1:ny) + a * vec2%pl_z(1:nx,1:ny)
+        vec1%mi_x(1:nx,1:ny) = vec1%mi_x(1:nx,1:ny) + a * vec2%mi_x(1:nx,1:ny)
+        vec1%mi_y(1:nx,1:ny) = vec1%mi_y(1:nx,1:ny) + a * vec2%mi_y(1:nx,1:ny)
+        vec1%mi_z(1:nx,1:ny) = vec1%mi_z(1:nx,1:ny) + a * vec2%mi_z(1:nx,1:ny)
 
     end select
 
@@ -129,12 +147,16 @@ subroutine self_linear_op_V1_aV2(vec1, vec2, a)
     select type(vec2)
     type is (TRSvec_3D)
 
-        vec1%pl_x = vec1%pl_x + a * vec2%pl_x
-        vec1%pl_y = vec1%pl_y + a * vec2%pl_y
-        vec1%pl_z = vec1%pl_z + a * vec2%pl_z
-        vec1%mi_x = vec1%mi_x + a * vec2%mi_x
-        vec1%mi_y = vec1%mi_y + a * vec2%mi_y
-        vec1%mi_z = vec1%mi_z + a * vec2%mi_z
+        nx = vec1%nx
+        ny = vec1%ny
+        nz = vec1%nz
+
+        vec1%pl_x(1:nx,1:ny,1:nz) = vec1%pl_x(1:nx,1:ny,1:nz) + a * vec2%pl_x(1:nx,1:ny,1:nz)
+        vec1%pl_y(1:nx,1:ny,1:nz) = vec1%pl_y(1:nx,1:ny,1:nz) + a * vec2%pl_y(1:nx,1:ny,1:nz)
+        vec1%pl_z(1:nx,1:ny,1:nz) = vec1%pl_z(1:nx,1:ny,1:nz) + a * vec2%pl_z(1:nx,1:ny,1:nz)
+        vec1%mi_x(1:nx,1:ny,1:nz) = vec1%mi_x(1:nx,1:ny,1:nz) + a * vec2%mi_x(1:nx,1:ny,1:nz)
+        vec1%mi_y(1:nx,1:ny,1:nz) = vec1%mi_y(1:nx,1:ny,1:nz) + a * vec2%mi_y(1:nx,1:ny,1:nz)
+        vec1%mi_z(1:nx,1:ny,1:nz) = vec1%mi_z(1:nx,1:ny,1:nz) + a * vec2%mi_z(1:nx,1:ny,1:nz)
     
     end select
 
@@ -150,16 +172,21 @@ subroutine self_linear_op_aV1_V2(vec1, vec2, a)
     class(TRSvec), intent(inout) :: vec1
     class(TRSvec), intent(in)    :: vec2
     complex(dp)  , intent(in)    :: a
+    
+    integer :: nx, ny, nz
 
     select type(vec1)
     type is (TRSvec_1D)
     select type(vec2)
     type is (TRSvec_1D)
 
-        vec1%pl_x = a * vec1%pl_x + vec2%pl_x
-        vec1%pl_y = a * vec1%pl_y + vec2%pl_y
-        vec1%mi_x = a * vec1%mi_x + vec2%mi_x
-        vec1%mi_y = a * vec1%mi_y + vec2%mi_y
+
+        nx = vec1%nx
+
+        vec1%pl_x(1:nx) = a * vec1%pl_x(1:nx) + vec2%pl_x(1:nx)
+        vec1%pl_y(1:nx) = a * vec1%pl_y(1:nx) + vec2%pl_y(1:nx)
+        vec1%mi_x(1:nx) = a * vec1%mi_x(1:nx) + vec2%mi_x(1:nx)
+        vec1%mi_y(1:nx) = a * vec1%mi_y(1:nx) + vec2%mi_y(1:nx)
 
     end select
 
@@ -167,12 +194,15 @@ subroutine self_linear_op_aV1_V2(vec1, vec2, a)
     select type(vec2)
     type is (TRSvec_2D)
 
-        vec1%pl_x = a * vec1%pl_x + vec2%pl_x
-        vec1%pl_y = a * vec1%pl_y + vec2%pl_y
-        vec1%pl_z = a * vec1%pl_z + vec2%pl_z
-        vec1%mi_x = a * vec1%mi_x + vec2%mi_x
-        vec1%mi_y = a * vec1%mi_y + vec2%mi_y
-        vec1%mi_z = a * vec1%mi_z + vec2%mi_z
+        nx = vec1%nx
+        ny = vec1%ny
+
+        vec1%pl_x(1:nx,1:ny) = a * vec1%pl_x(1:nx,1:ny) + vec2%pl_x(1:nx,1:ny)
+        vec1%pl_y(1:nx,1:ny) = a * vec1%pl_y(1:nx,1:ny) + vec2%pl_y(1:nx,1:ny)
+        vec1%pl_z(1:nx,1:ny) = a * vec1%pl_z(1:nx,1:ny) + vec2%pl_z(1:nx,1:ny)
+        vec1%mi_x(1:nx,1:ny) = a * vec1%mi_x(1:nx,1:ny) + vec2%mi_x(1:nx,1:ny)
+        vec1%mi_y(1:nx,1:ny) = a * vec1%mi_y(1:nx,1:ny) + vec2%mi_y(1:nx,1:ny)
+        vec1%mi_z(1:nx,1:ny) = a * vec1%mi_z(1:nx,1:ny) + vec2%mi_z(1:nx,1:ny)
 
     end select
 
@@ -180,12 +210,16 @@ subroutine self_linear_op_aV1_V2(vec1, vec2, a)
     select type(vec2)
     type is (TRSvec_3D)
 
-        vec1%pl_x = a * vec1%pl_x + vec2%pl_x
-        vec1%pl_y = a * vec1%pl_y + vec2%pl_y
-        vec1%pl_z = a * vec1%pl_z + vec2%pl_z
-        vec1%mi_x = a * vec1%mi_x + vec2%mi_x
-        vec1%mi_y = a * vec1%mi_y + vec2%mi_y
-        vec1%mi_z = a * vec1%mi_z + vec2%mi_z
+        nx = vec1%nx
+        ny = vec1%ny
+        nz = vec1%nz
+
+        vec1%pl_x(1:nx,1:ny,1:nz) = a * vec1%pl_x(1:nx,1:ny,1:nz) + vec2%pl_x(1:nx,1:ny,1:nz)
+        vec1%pl_y(1:nx,1:ny,1:nz) = a * vec1%pl_y(1:nx,1:ny,1:nz) + vec2%pl_y(1:nx,1:ny,1:nz)
+        vec1%pl_z(1:nx,1:ny,1:nz) = a * vec1%pl_z(1:nx,1:ny,1:nz) + vec2%pl_z(1:nx,1:ny,1:nz)
+        vec1%mi_x(1:nx,1:ny,1:nz) = a * vec1%mi_x(1:nx,1:ny,1:nz) + vec2%mi_x(1:nx,1:ny,1:nz)
+        vec1%mi_y(1:nx,1:ny,1:nz) = a * vec1%mi_y(1:nx,1:ny,1:nz) + vec2%mi_y(1:nx,1:ny,1:nz)
+        vec1%mi_z(1:nx,1:ny,1:nz) = a * vec1%mi_z(1:nx,1:ny,1:nz) + vec2%mi_z(1:nx,1:ny,1:nz)
     
     end select
 
@@ -208,7 +242,8 @@ subroutine dot_product_V1_V2(vec1, vec2, dot_prod)
     complex(dp) :: global_dot_prod
 #endif
 
-    dot_prod = 0.0_dp
+    dot_prod = Z_0
+    local_dot_prod = Z_0
 
     select type(vec1)
     type is (TRSvec_1D)
@@ -259,7 +294,7 @@ subroutine dot_product_V1_V2(vec1, vec2, dot_prod)
     end select
 
 #ifdef USE_MPI
-    call MPI_Allreduce(local_dot_prod, global_dot_prod, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+    call MPI_Allreduce(local_dot_prod, global_dot_prod, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
     dot_prod = global_dot_prod
 #else
@@ -280,10 +315,10 @@ subroutine copy_V2_on_V1(vec1, vec2)
     select type(vec2)
     type is (TRSvec_1D)
 
-        vec1%pl_x = vec2%pl_x
-        vec1%pl_y = vec2%pl_y
-        vec1%mi_x = vec2%mi_x
-        vec1%mi_y = vec2%mi_y
+        vec1%pl_x(:) = vec2%pl_x(:)
+        vec1%pl_y(:) = vec2%pl_y(:)
+        vec1%mi_x(:) = vec2%mi_x(:)
+        vec1%mi_y(:) = vec2%mi_y(:)
 
     end select
 
@@ -291,12 +326,12 @@ subroutine copy_V2_on_V1(vec1, vec2)
     select type(vec2)
     type is (TRSvec_2D)
 
-        vec1%pl_x = vec2%pl_x
-        vec1%pl_y = vec2%pl_y
-        vec1%pl_z = vec2%pl_z
-        vec1%mi_x = vec2%mi_x
-        vec1%mi_y = vec2%mi_y
-        vec1%mi_z = vec2%mi_z
+        vec1%pl_x(:,:) = vec2%pl_x(:,:)
+        vec1%pl_y(:,:) = vec2%pl_y(:,:)
+        vec1%pl_z(:,:) = vec2%pl_z(:,:)
+        vec1%mi_x(:,:) = vec2%mi_x(:,:)
+        vec1%mi_y(:,:) = vec2%mi_y(:,:)
+        vec1%mi_z(:,:) = vec2%mi_z(:,:)
 
     end select
 
@@ -304,12 +339,12 @@ subroutine copy_V2_on_V1(vec1, vec2)
     select type(vec2)
     type is (TRSvec_3D)
 
-        vec1%pl_x = vec2%pl_x
-        vec1%pl_y = vec2%pl_y
-        vec1%pl_z = vec2%pl_z
-        vec1%mi_x = vec2%mi_x
-        vec1%mi_y = vec2%mi_y
-        vec1%mi_z = vec2%mi_z
+        vec1%pl_x(:,:,:) = vec2%pl_x(:,:,:)
+        vec1%pl_y(:,:,:) = vec2%pl_y(:,:,:)
+        vec1%pl_z(:,:,:) = vec2%pl_z(:,:,:)
+        vec1%mi_x(:,:,:) = vec2%mi_x(:,:,:)
+        vec1%mi_y(:,:,:) = vec2%mi_y(:,:,:)
+        vec1%mi_z(:,:,:) = vec2%mi_z(:,:,:)
     
     end select
 
@@ -324,32 +359,42 @@ subroutine self_product_aV1(vec1, a)
     class(TRSvec), intent(inout) :: vec1
     complex(dp)  , intent(in)    :: a
 
+    integer :: nx, ny, nz
+
     select type(vec1)
     type is (TRSvec_1D)
 
-        vec1%pl_x = a * vec1%pl_x
-        vec1%pl_y = a * vec1%pl_y
-        vec1%mi_x = a * vec1%mi_x
-        vec1%mi_y = a * vec1%mi_y
+        nx = vec1%nx
+
+        vec1%pl_x(1:nx) = a * vec1%pl_x(1:nx)
+        vec1%pl_y(1:nx) = a * vec1%pl_y(1:nx)
+        vec1%mi_x(1:nx) = a * vec1%mi_x(1:nx)
+        vec1%mi_y(1:nx) = a * vec1%mi_y(1:nx)
 
     type is (TRSvec_2D)
 
+        nx = vec1%nx
+        ny = vec1%ny
 
-        vec1%pl_x = a * vec1%pl_x
-        vec1%pl_y = a * vec1%pl_y
-        vec1%pl_z = a * vec1%pl_z
-        vec1%mi_x = a * vec1%mi_x
-        vec1%mi_y = a * vec1%mi_y
-        vec1%mi_z = a * vec1%mi_z
+        vec1%pl_x(1:nx,1:ny) = a * vec1%pl_x(1:nx,1:ny)
+        vec1%pl_y(1:nx,1:ny) = a * vec1%pl_y(1:nx,1:ny)
+        vec1%pl_z(1:nx,1:ny) = a * vec1%pl_z(1:nx,1:ny)
+        vec1%mi_x(1:nx,1:ny) = a * vec1%mi_x(1:nx,1:ny)
+        vec1%mi_y(1:nx,1:ny) = a * vec1%mi_y(1:nx,1:ny)
+        vec1%mi_z(1:nx,1:ny) = a * vec1%mi_z(1:nx,1:ny)
 
     type is (TRSvec_3D)
 
-        vec1%pl_x = a * vec1%pl_x
-        vec1%pl_y = a * vec1%pl_y
-        vec1%pl_z = a * vec1%pl_z
-        vec1%mi_x = a * vec1%mi_x
-        vec1%mi_y = a * vec1%mi_y
-        vec1%mi_z = a * vec1%mi_z
+        nx = vec1%nx
+        ny = vec1%ny
+        nz = vec1%nz
+
+        vec1%pl_x(1:nx,1:ny,1:nz) = a * vec1%pl_x(1:nx,1:ny,1:nz)
+        vec1%pl_y(1:nx,1:ny,1:nz) = a * vec1%pl_y(1:nx,1:ny,1:nz)
+        vec1%pl_z(1:nx,1:ny,1:nz) = a * vec1%pl_z(1:nx,1:ny,1:nz)
+        vec1%mi_x(1:nx,1:ny,1:nz) = a * vec1%mi_x(1:nx,1:ny,1:nz)
+        vec1%mi_y(1:nx,1:ny,1:nz) = a * vec1%mi_y(1:nx,1:ny,1:nz)
+        vec1%mi_z(1:nx,1:ny,1:nz) = a * vec1%mi_z(1:nx,1:ny,1:nz)
     
     end select
 
@@ -363,28 +408,28 @@ subroutine reset_V1_to_zero(vec1)
     select type(vec1)
     type is (TRSvec_1D)
 
-        vec1%pl_x = Z_0
-        vec1%pl_y = Z_0
-        vec1%mi_x = Z_0
-        vec1%mi_y = Z_0
+        vec1%pl_x(:) = Z_0
+        vec1%pl_y(:) = Z_0
+        vec1%mi_x(:) = Z_0
+        vec1%mi_y(:) = Z_0
     
     type is (TRSvec_2D)
 
-        vec1%pl_x = Z_0
-        vec1%pl_y = Z_0
-        vec1%pl_z = Z_0
-        vec1%mi_x = Z_0
-        vec1%mi_y = Z_0
-        vec1%mi_z = Z_0
+        vec1%pl_x(:,:) = Z_0
+        vec1%pl_y(:,:) = Z_0
+        vec1%pl_z(:,:) = Z_0
+        vec1%mi_x(:,:) = Z_0
+        vec1%mi_y(:,:) = Z_0
+        vec1%mi_z(:,:) = Z_0
 
     type is (TRSvec_3D)
 
-        vec1%pl_x = Z_0
-        vec1%pl_y = Z_0
-        vec1%pl_z = Z_0
-        vec1%mi_x = Z_0
-        vec1%mi_y = Z_0
-        vec1%mi_z = Z_0
+        vec1%pl_x(:,:,:) = Z_0
+        vec1%pl_y(:,:,:) = Z_0
+        vec1%pl_z(:,:,:) = Z_0
+        vec1%mi_x(:,:,:) = Z_0
+        vec1%mi_y(:,:,:) = Z_0
+        vec1%mi_z(:,:,:) = Z_0
     
     end select
 

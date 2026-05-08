@@ -3,6 +3,10 @@ module allocator_multidim_mod
      use constants_mod
      use rs_vec_base_mod
      use rs_vec_dimensions_mod
+     use design_base_mod
+     use design_1D_mod
+     use design_2D_mod
+     use design_3D_mod
 
     interface rs_vec_factory
         module procedure rs_vec_factory_single
@@ -64,6 +68,25 @@ function rs_vec_factory_array(dim, n_max,n_min) result(vec)
         error stop
     end select
 end function rs_vec_factory_array
+
+!###################################################################################################
+
+function design_factory(dim) result(design)
+    integer, intent(in) :: dim
+    class(TDesign), allocatable :: design
+
+    select case (dim)
+    case (1)
+        allocate(TDesign_1D :: design)
+    case (2)
+        allocate(TDesign_2D :: design)        
+    case (3)
+        allocate(TDesign_3D :: design)
+    case default
+        write (*, '("Error: invalid number of dimensions: ", I0)') dim
+        error stop
+    end select
+end function design_factory
 
 !###################################################################################################
 

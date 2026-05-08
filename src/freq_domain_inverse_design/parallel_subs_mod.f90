@@ -6,6 +6,10 @@ module parallel_subs_mod
     use constants_mod
     use rs_vec_base_mod
     use rs_vec_dimensions_mod
+    use design_base_mod
+    use design_1D_mod
+    use design_2D_mod
+    use design_3D_mod
 
     implicit none
 
@@ -56,11 +60,6 @@ module parallel_subs_mod
         module procedure extend_array_to_z_ranks_3D_L
     end interface extend_array_to_z_ranks_3D
 
-    interface extend_array_to_ranks
-        module procedure extend_array_to_ranks_R
-        module procedure extend_array_to_ranks_L
-    end interface extend_array_to_ranks
-
 contains
 !###################################################################################################
 subroutine init_parallelization(dimensions, mpi_coords, mpi_dims, mpi_nprocs, mpi_cart_comm, &
@@ -76,11 +75,33 @@ subroutine init_parallelization(dimensions, mpi_coords, mpi_dims, mpi_nprocs, mp
         integer :: i
         integer :: coords_aux(dimensions)
         integer :: ierr
+        integer :: nprocs_world
+        integer :: requested_nprocs
 
 #ifdef USE_MPI
 
-        nprocs = mpi_nprocs
+        requested_nprocs = mpi_nprocs
         ndims = dimensions
+
+        !~~~~=== setting and initializing MPI ===~~~~!
+        !MPI is initialized before defining grid sizes. This should be separated in a different module
+        !and also consdier non-parallelized cases.
+        call mpi_init(ierr)
+        call mpi_comm_size(MPI_COMM_WORLD, nprocs_world, ierr)      !<--- nprocs=total number of processors
+
+        if (ierr /= 0) then
+            write (*, '("Error: MPI_Comm_size failed")')
+            error stop
+        end if
+
+        if (nprocs_world /= requested_nprocs) then
+            write (*, '("Error: mpirun -np ", I0, " does not match mpi_dims product (", I0, ")")') &
+                nprocs_world, requested_nprocs
+            error stop
+        end if
+
+        nprocs = nprocs_world
+
         if (.not. allocated(periods)) allocate(periods(ndims))
         if (.not. allocated(dims)) allocate(dims(ndims))
         if (.not. allocated(coords)) allocate(coords(ndims))
@@ -93,23 +114,13 @@ subroutine init_parallelization(dimensions, mpi_coords, mpi_dims, mpi_nprocs, mp
         do i=1, ndims
             if (boundaries(i) == PERIODIC_BOUNDARIES) periods(i) = .true.
         end do
-
-        !~~~~=== setting and initializing MPI ===~~~~!
-        !MPI is initialized before defining grid sizes. This should be separated in a different module
-        !and also consdier non-parallelized cases.
-        call mpi_init(ierr)
-        call mpi_comm_size(MPI_COMM_WORLD,nprocs,ierr)      !<--- nprocs=total number of processors
-        
-        if (ierr /= 0) then
-            write (*, '("Error: number of processors does not match the number specified in the input file")')
-            error stop
-        end if
         
         call mpi_comm_rank(MPI_COMM_WORLD,myrank,ierr)      !<--- myrank now is set to unique integer for each processor
        
         if (ndims == 1) then
 
             mpi_coords(1) = myrank
+            cartesian_comm = MPI_COMM_WORLD
 
         else if (ndims > 1) then
 
@@ -286,62 +297,73 @@ subroutine extend_fvec_to_ranks(f_vec)
     end select
 
 end subroutine extend_fvec_to_ranks
+!###################################################################################################
+
+subroutine extend_rho_to_ranks(design)
+
+    class(TDesign), intent(inout) :: design
+
+    select type (design)
+    type is (TDesign_1D)
+        return
+    type is (TDesign_2D)
+        call extend_array_to_x_ranks_2D(design%rho, design%nx, design%ny, design%n_ker)
+        call extend_array_to_y_ranks_2D(design%rho, design%nx, design%ny, design%n_ker)
+    type is (TDesign_3D)
+        call extend_array_to_x_ranks_3D(design%rho, design%nx, design%ny, design%nz, design%n_ker)
+        call extend_array_to_y_ranks_3D(design%rho, design%nx, design%ny, design%nz, design%n_ker)
+        call extend_array_to_z_ranks_3D(design%rho, design%nx, design%ny, design%nz, design%n_ker)
+    end select
+
+end subroutine extend_rho_to_ranks
 
 !###################################################################################################
 
-subroutine extend_array_to_ranks_R(array, dim, nx, ny, nz, n_ghost)
+subroutine extend_grad_to_ranks(design)
 
-    real(dp), intent(inout) :: array(:,:,:)
-    integer , intent(in)    :: dim
-    integer , intent(in)    :: nx
-    integer , intent(in)    :: ny
-    integer , intent(in)    :: nz
-    integer , intent(in)    :: n_ghost
+    class(TDesign), intent(inout) :: design
 
-    select case (dim)
-    case (1)
+    select type (design)
+    type is (TDesign_1D)
         return
-    case (2)
-        call extend_array_to_x_ranks_2D(array(:,:,1), nx, ny, n_ghost)
-        call extend_array_to_y_ranks_2D(array(:,:,1), nx, ny, n_ghost)
-    case (3)
-        call extend_array_to_x_ranks_3D(array, nx, ny, nz, n_ghost)
-        call extend_array_to_y_ranks_3D(array, nx, ny, nz, n_ghost)
-        call extend_array_to_z_ranks_3D(array, nx, ny, nz, n_ghost)
+    type is (TDesign_2D)
+        call extend_array_to_x_ranks_2D(design%grad, design%nx, design%ny, design%n_ker)
+        call extend_array_to_y_ranks_2D(design%grad, design%nx, design%ny, design%n_ker)
+    type is (TDesign_3D)
+        call extend_array_to_x_ranks_3D(design%grad, design%nx, design%ny, design%nz, design%n_ker)
+        call extend_array_to_y_ranks_3D(design%grad, design%nx, design%ny, design%nz, design%n_ker)
+        call extend_array_to_z_ranks_3D(design%grad, design%nx, design%ny, design%nz, design%n_ker)
     end select
 
-end subroutine extend_array_to_ranks_R
-
+end subroutine extend_grad_to_ranks
 !###################################################################################################
 
-subroutine extend_array_to_ranks_L(array, dim, nx, ny, nz, n_ghost)
+subroutine extend_opt_region_to_ranks(design)
 
-    logical , intent(inout) :: array(:,:,:)
-    integer , intent(in)    :: dim
-    integer , intent(in)    :: nx
-    integer , intent(in)    :: ny
-    integer , intent(in)    :: nz
-    integer , intent(in)    :: n_ghost
+    class(TDesign), intent(inout) :: design
 
-    select case (dim)
-    case (1)
+    select type (design)
+    type is (TDesign_1D)
         return
-    case (2)
-        call extend_array_to_x_ranks_2D(array(:,:,1), nx, ny, n_ghost)
-        call extend_array_to_y_ranks_2D(array(:,:,1), nx, ny, n_ghost)
-    case (3)
-        call extend_array_to_x_ranks_3D(array, nx, ny, nz, n_ghost)
-        call extend_array_to_y_ranks_3D(array, nx, ny, nz, n_ghost)
-        call extend_array_to_z_ranks_3D(array, nx, ny, nz, n_ghost)
+    type is (TDesign_2D)
+        call extend_array_to_x_ranks_2D(design%opt_region, design%nx, design%ny, design%n_ker)
+        call extend_array_to_y_ranks_2D(design%opt_region, design%nx, design%ny, design%n_ker)
+    type is (TDesign_3D)
+        call extend_array_to_x_ranks_3D(design%opt_region, design%nx, design%ny, &
+                                        design%nz, design%n_ker)
+        call extend_array_to_y_ranks_3D(design%opt_region, design%nx, design%ny, &
+                                        design%nz, design%n_ker)
+        call extend_array_to_z_ranks_3D(design%opt_region, design%nx, design%ny, &
+                                        design%nz, design%n_ker)
     end select
 
-end subroutine extend_array_to_ranks_L
+end subroutine extend_opt_region_to_ranks
 
 !###################################################################################################
 
 subroutine extend_array_to_x_ranks_2D_C(array, nx, ny, n_ghost)
 
-    complex(dp), intent(inout) :: array(:,:)
+    complex(dp), intent(inout) :: array(-n_ghost+1:nx+n_ghost,-n_ghost+1:ny+n_ghost)
     integer    , intent(in)    :: nx
     integer    , intent(in)    :: ny
     integer    , intent(in)    :: n_ghost
@@ -349,13 +371,26 @@ subroutine extend_array_to_x_ranks_2D_C(array, nx, ny, n_ghost)
 #ifdef USE_MPI
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
+    integer     :: i, j, n
+    complex(dp) :: send_buffer(ny*n_ghost)
+    complex(dp) :: recv_buffer(ny*n_ghost)
 
-    call mpi_sendrecv(array(1:n_ghost, 1:ny), &  !<=== sending
+    recv_buffer = Z_0
+
+    n = 1
+    do j = 1, ny
+    do i = 1, n_ghost
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     ny*n_ghost, &                                       !<=== the size
     mpi_double_complex, &                          !<=== type
     Xprev, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag
-    array(nx+1:nx+n_ghost, 1:ny), &               !<=== receiving
+    recv_buffer, &               !<=== receiving
     ny*n_ghost, &                                       !<=== the size
     mpi_double_complex, &                          !<=== type
     Xnext, &                                         !<=== receiving from where
@@ -364,13 +399,31 @@ subroutine extend_array_to_x_ranks_2D_C(array, nx, ny, n_ghost)
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
 
+    n = 1
+    do j = 1, ny
+    do i = nx+1, nx+n_ghost
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
+
+    n = 1
+    do j = 1, ny
+    do i = nx-n_ghost+1, nx
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    recv_buffer = Z_0
+
     !i+1,j
-    call mpi_sendrecv(array(nx-n_ghost+1:nx, 1:ny), &  !<=== sending 
+    call mpi_sendrecv(send_buffer, &  !<=== sending 
     ny*n_ghost, &                                       !<=== the size
     mpi_double_complex, &                          !<=== type
     Xnext, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag   
-    array(-n_ghost+1:0, 1:ny), &               !<=== receiving
+    recv_buffer, &               !<=== receiving
     ny*n_ghost, &                                       !<=== the size
     mpi_double_complex, &                          !<=== type
     Xprev, &                                         !<=== receiving from where
@@ -378,6 +431,14 @@ subroutine extend_array_to_x_ranks_2D_C(array, nx, ny, n_ghost)
     cartesian_comm, &                                !<=== handle of Cartesian coordinates
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
+
+    n = 1
+    do j = 1, ny
+    do i = -n_ghost+1, 0
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
 
 #else
 
@@ -391,7 +452,7 @@ end subroutine extend_array_to_x_ranks_2D_C
 
 subroutine extend_array_to_x_ranks_2D_R(array, nx, ny, n_ghost)
 
-    real(dp), intent(inout) :: array(:,:)
+    real(dp), intent(inout) :: array(-n_ghost+1:nx+n_ghost,-n_ghost+1:ny+n_ghost)
     integer , intent(in)    :: nx
     integer , intent(in)    :: ny
     integer , intent(in)    :: n_ghost
@@ -399,13 +460,26 @@ subroutine extend_array_to_x_ranks_2D_R(array, nx, ny, n_ghost)
 #ifdef USE_MPI
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
+    integer     :: i, j, n
+    real(dp)    :: send_buffer(ny*n_ghost)
+    real(dp)    :: recv_buffer(ny*n_ghost)
 
-    call mpi_sendrecv(array(1:n_ghost, 1:ny), &  !<=== sending
+    recv_buffer = 0.0_dp
+
+    n = 1
+    do j = 1, ny
+    do i = 1, n_ghost
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     ny*n_ghost, &                                       !<=== the size
     mpi_double_precision, &                          !<=== type
     Xprev, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag
-    array(nx+1:nx+n_ghost, 1:ny), &               !<=== receiving
+    recv_buffer, &               !<=== receiving
     ny*n_ghost, &                                       !<=== the size
     mpi_double_precision, &                          !<=== type
     Xnext, &                                         !<=== receiving from where
@@ -414,13 +488,32 @@ subroutine extend_array_to_x_ranks_2D_R(array, nx, ny, n_ghost)
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
 
+    n = 1
+    do j = 1, ny
+    do i = nx+1, nx+n_ghost
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
+
+    n = 1
+    do j = 1, ny
+    do i = nx-n_ghost+1, nx
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    recv_buffer = 0.0_dp
+
+
     !i+1,j
-    call mpi_sendrecv(array(nx-n_ghost+1:nx, 1:ny), &  !<=== sending 
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     ny*n_ghost, &                                       !<=== the size
     mpi_double_precision, &                          !<=== type
     Xnext, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag   
-    array(-n_ghost+1:0, 1:ny), &               !<=== receiving
+    recv_buffer, &               !<=== receiving
     ny*n_ghost, &                                       !<=== the size
     mpi_double_precision, &                          !<=== type
     Xprev, &                                         !<=== receiving from where
@@ -428,6 +521,14 @@ subroutine extend_array_to_x_ranks_2D_R(array, nx, ny, n_ghost)
     cartesian_comm, &                                !<=== handle of Cartesian coordinates
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
+
+    n = 1
+    do j = 1, ny
+    do i = -n_ghost+1, 0
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
 
 #else
 
@@ -441,7 +542,7 @@ end subroutine extend_array_to_x_ranks_2D_R
 
 subroutine extend_array_to_x_ranks_2D_L(array, nx, ny, n_ghost)
 
-    logical, intent(inout) :: array(:,:)
+    logical, intent(inout) :: array(-n_ghost+1:nx+n_ghost,-n_ghost+1:ny+n_ghost)
     integer, intent(in)    :: nx
     integer, intent(in)    :: ny
     integer, intent(in)    :: n_ghost
@@ -449,13 +550,27 @@ subroutine extend_array_to_x_ranks_2D_L(array, nx, ny, n_ghost)
 #ifdef USE_MPI
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
+    integer     :: i, j, n
+    logical     :: send_buffer(ny*n_ghost)
+    logical     :: recv_buffer(ny*n_ghost)
 
-    call mpi_sendrecv(array(1:n_ghost, 1:ny), &  !<=== sending
+
+    recv_buffer = .false.
+
+    n = 1
+    do j = 1, ny
+    do i = 1, n_ghost
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     ny*n_ghost, &                                       !<=== the size
     mpi_logical, &                          !<=== type
     Xprev, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag
-    array(nx+1:nx+n_ghost, 1:ny), &               !<=== receiving
+    recv_buffer, &               !<=== receiving
     ny*n_ghost, &                                       !<=== the size
     mpi_logical, &                          !<=== type
     Xnext, &                                         !<=== receiving from where
@@ -464,12 +579,30 @@ subroutine extend_array_to_x_ranks_2D_L(array, nx, ny, n_ghost)
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
 
-    call mpi_sendrecv(array(nx-n_ghost+1:nx, 1:ny), &  !<=== sending 
+    n = 1
+    do j = 1, ny
+    do i = nx+1, nx+n_ghost
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
+
+    n = 1
+    do j = 1, ny
+    do i = nx-n_ghost+1, nx
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    recv_buffer = .false.
+
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     ny*n_ghost, &                                       !<=== the size
     mpi_logical, &                          !<=== type
     Xnext, &                                         !<=== where sending
-    MPI_GOOD_TAG, &                                  !<=== sending tag   
-    array(-n_ghost+1:0, 1:ny), &               !<=== receiving
+    MPI_GOOD_TAG, &                                  !<=== sending tag
+    recv_buffer, &                                   !<=== receiving
     ny*n_ghost, &                                       !<=== the size
     mpi_logical, &                          !<=== type
     Xprev, &                                         !<=== receiving from where
@@ -477,6 +610,14 @@ subroutine extend_array_to_x_ranks_2D_L(array, nx, ny, n_ghost)
     cartesian_comm, &                                !<=== handle of Cartesian coordinates
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
+
+    n = 1
+    do j = 1, ny
+    do i = -n_ghost+1, 0
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
 
 #else
     return
@@ -487,21 +628,34 @@ end subroutine extend_array_to_x_ranks_2D_L
 
 subroutine extend_array_to_y_ranks_2D_C(array, nx, ny, n_ghost)
 
-    complex(dp), intent(inout) :: array(:,:)
+    complex(dp), intent(inout) :: array(-n_ghost+1:nx+n_ghost,-n_ghost+1:ny+n_ghost)
     integer    , intent(in)    :: nx
     integer    , intent(in)    :: ny
     integer    , intent(in)    :: n_ghost
 
 #ifdef USE_MPI
-    integer :: ierr
-    integer :: istatus(MPI_STATUS_SIZE)
+    integer     :: ierr
+    integer     :: istatus(MPI_STATUS_SIZE)
+    integer     :: i, j, n
+    complex(dp) :: send_buffer(nx*n_ghost)
+    complex(dp) :: recv_buffer(nx*n_ghost)
 
-    call mpi_sendrecv(array(1:nx, 1:n_ghost), &  !<=== sending
+    recv_buffer = Z_0
+
+    n = 1
+    do j = 1, n_ghost
+    do i = 1, nx
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     nx*n_ghost, &                                       !<=== the size
     mpi_double_complex, &                          !<=== type
     Yprev, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag
-    array(1:nx, ny+1:ny+n_ghost), &               !<=== receiving
+    recv_buffer, &                                   !<=== receiving
     nx*n_ghost, &                                       !<=== the size
     mpi_double_complex, &                          !<=== type
     Ynext, &                                         !<=== receiving from where
@@ -510,12 +664,30 @@ subroutine extend_array_to_y_ranks_2D_C(array, nx, ny, n_ghost)
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
 
-    call mpi_sendrecv(array(1:nx, ny-n_ghost+1:ny), &  !<=== sending
+    n = 1
+    do j = ny+1, ny+n_ghost
+    do i = 1, nx
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
+
+    n = 1
+    do j = ny-n_ghost+1, ny
+    do i = 1, nx
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    recv_buffer = Z_0
+
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     nx*n_ghost, &                                       !<=== the size
     mpi_double_complex, &                          !<=== type
     Ynext, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag   
-    array(1:nx, -n_ghost+1:0), &               !<=== receiving
+    recv_buffer, &               !<=== receiving
     nx*n_ghost, &                                       !<=== the size
     mpi_double_complex, &                          !<=== type
     Yprev, &                                         !<=== receiving from where
@@ -523,6 +695,14 @@ subroutine extend_array_to_y_ranks_2D_C(array, nx, ny, n_ghost)
     cartesian_comm, &                                !<=== handle of Cartesian coordinates
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
+
+    n = 1
+    do j = -n_ghost+1, 0
+    do i = 1, nx
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
 
 #else
     return
@@ -533,7 +713,7 @@ end subroutine extend_array_to_y_ranks_2D_C
 
 subroutine extend_array_to_y_ranks_2D_R(array, nx, ny, n_ghost)
 
-    real(dp), intent(inout) :: array(:,:)
+    real(dp), intent(inout) :: array(-n_ghost+1:nx+n_ghost,-n_ghost+1:ny+n_ghost)
     integer , intent(in)    :: nx
     integer , intent(in)    :: ny
     integer , intent(in)    :: n_ghost
@@ -541,13 +721,26 @@ subroutine extend_array_to_y_ranks_2D_R(array, nx, ny, n_ghost)
 #ifdef USE_MPI
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
+    integer     :: i, j, n
+    real(dp)    :: send_buffer(nx*n_ghost)
+    real(dp)    :: recv_buffer(nx*n_ghost)
 
-    call mpi_sendrecv(array(1:nx, 1:n_ghost), &  !<=== sending
+    recv_buffer = 0.0_dp
+
+    n = 1
+    do j = 1, n_ghost
+    do i = 1, nx
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     nx*n_ghost, &                                       !<=== the size
     mpi_double_precision, &                          !<=== type
     Yprev, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag
-    array(1:nx, ny+1:ny+n_ghost), &               !<=== receiving
+    recv_buffer, &                                   !<=== receiving
     nx*n_ghost, &                                       !<=== the size
     mpi_double_precision, &                          !<=== type
     Ynext, &                                         !<=== receiving from where
@@ -556,12 +749,30 @@ subroutine extend_array_to_y_ranks_2D_R(array, nx, ny, n_ghost)
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
 
-    call mpi_sendrecv(array(1:nx, ny-n_ghost+1:ny), &  !<=== sending
+    n = 1
+    do j = ny+1, ny+n_ghost
+    do i = 1, nx
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
+
+    n = 1
+    do j = ny-n_ghost+1, ny
+    do i = 1, nx
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    recv_buffer = 0.0_dp
+
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     nx*n_ghost, &                                       !<=== the size
     mpi_double_precision, &                          !<=== type
     Ynext, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag   
-    array(1:nx, -n_ghost+1:0), &               !<=== receiving
+    recv_buffer, &                                   !<=== receiving
     nx*n_ghost, &                                       !<=== the size
     mpi_double_precision, &                          !<=== type
     Yprev, &                                         !<=== receiving from where
@@ -569,6 +780,14 @@ subroutine extend_array_to_y_ranks_2D_R(array, nx, ny, n_ghost)
     cartesian_comm, &                                !<=== handle of Cartesian coordinates
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
+
+    n = 1
+    do j = -n_ghost+1, 0
+    do i = 1, nx
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
 
 #else
     return
@@ -579,7 +798,7 @@ end subroutine extend_array_to_y_ranks_2D_R
 
 subroutine extend_array_to_y_ranks_2D_L(array, nx, ny, n_ghost)
 
-    logical, intent(inout) :: array(:,:)
+    logical, intent(inout) :: array(-n_ghost+1:nx+n_ghost,-n_ghost+1:ny+n_ghost)
     integer, intent(in)    :: nx
     integer, intent(in)    :: ny
     integer, intent(in)    :: n_ghost
@@ -587,13 +806,26 @@ subroutine extend_array_to_y_ranks_2D_L(array, nx, ny, n_ghost)
 #ifdef USE_MPI
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
+    integer     :: i, j, n
+    logical     :: send_buffer(nx*n_ghost)
+    logical     :: recv_buffer(nx*n_ghost)
 
-    call mpi_sendrecv(array(1:nx, 1:n_ghost), &  !<=== sending
+    recv_buffer = .false.
+
+    n = 1
+    do j = 1, n_ghost
+    do i = 1, nx
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     nx*n_ghost, &                                       !<=== the size
     mpi_logical, &                          !<=== type
     Yprev, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag
-    array(1:nx, ny+1:ny+n_ghost), &               !<=== receiving
+    recv_buffer, &                                   !<=== receiving
     nx*n_ghost, &                                       !<=== the size
     mpi_logical, &                          !<=== type
     Ynext, &                                         !<=== receiving from where
@@ -602,12 +834,30 @@ subroutine extend_array_to_y_ranks_2D_L(array, nx, ny, n_ghost)
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
 
-    call mpi_sendrecv(array(1:nx, ny-n_ghost+1:ny), &  !<=== sending
+    n = 1
+    do j = ny+1, ny+n_ghost
+    do i = 1, nx
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
+
+    n = 1
+    do j = ny-n_ghost+1, ny
+    do i = 1, nx
+        send_buffer(n) = array(i, j)
+        n = n + 1
+    end do
+    end do
+
+    recv_buffer = .false.
+
+    call mpi_sendrecv(send_buffer, &  !<=== sending
     nx*n_ghost, &                                       !<=== the size
     mpi_logical, &                          !<=== type
     Ynext, &                                         !<=== where sending
     MPI_GOOD_TAG, &                                  !<=== sending tag   
-    array(1:nx, -n_ghost+1:0), &               !<=== receiving
+    recv_buffer, &                                   !<=== receiving
     nx*n_ghost, &                                       !<=== the size
     mpi_logical, &                          !<=== type
     Yprev, &                                         !<=== receiving from where
@@ -615,6 +865,14 @@ subroutine extend_array_to_y_ranks_2D_L(array, nx, ny, n_ghost)
     cartesian_comm, &                                !<=== handle of Cartesian coordinates
     istatus, &                                       !<=== istatus
     ierr)                                            !<=== error code
+
+    n = 1
+    do j = -n_ghost+1, 0
+    do i = 1, nx
+        array(i, j) = recv_buffer(n)
+        n = n + 1
+    end do
+    end do
 
 #else
     return
@@ -635,6 +893,9 @@ subroutine extend_array_to_x_ranks_3D_C(array, nx, ny, nz, n_ghost)
 #ifdef USE_MPI
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
+
+    array(-n_ghost+1:0, 1:ny, 1:nz)     = Z_0
+    array(nx+1:nx+n_ghost, 1:ny, 1:nz)  = Z_0
 
     call mpi_sendrecv(array(1:n_ghost, 1:ny, 1:nz), &  !<=== sending
     ny*nz*n_ghost, &                                       !<=== the size
@@ -684,6 +945,9 @@ subroutine extend_array_to_x_ranks_3D_R(array, nx, ny, nz, n_ghost)
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
 
+    array(-n_ghost+1:0, 1:ny, 1:nz)     = 0.0_dp
+    array(nx+1:nx+n_ghost, 1:ny, 1:nz)  = 0.0_dp
+
     call mpi_sendrecv(array(1:n_ghost, 1:ny, 1:nz), &  !<=== sending
     ny*nz*n_ghost, &                                       !<=== the size
     mpi_double_precision, &                          !<=== type
@@ -731,6 +995,9 @@ subroutine extend_array_to_x_ranks_3D_L(array, nx, ny, nz, n_ghost)
 #ifdef USE_MPI
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
+
+    array(-n_ghost+1:0, 1:ny, 1:nz)     = .false.
+    array(nx+1:nx+n_ghost, 1:ny, 1:nz)  = .false.
 
     call mpi_sendrecv(array(1:n_ghost, 1:ny, 1:nz), &  !<=== sending
     ny*nz*n_ghost, &                                       !<=== the size
@@ -780,6 +1047,9 @@ subroutine extend_array_to_y_ranks_3D_C(array, nx, ny, nz, n_ghost)
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
 
+    array(1:nx, -n_ghost+1:0, 1:nz)     = Z_0
+    array(1:nx, ny+1:ny+n_ghost, 1:nz)  = Z_0
+
     call mpi_sendrecv(array(1:nx, 1:n_ghost, 1:nz), &  !<=== sending
     nx*nz*n_ghost, &                                       !<=== the size
     mpi_double_complex, &                          !<=== type
@@ -827,6 +1097,9 @@ subroutine extend_array_to_y_ranks_3D_R(array, nx, ny, nz, n_ghost)
 #ifdef USE_MPI
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
+
+    array(1:nx, -n_ghost+1:0, 1:nz)     = 0.0_dp
+    array(1:nx, ny+1:ny+n_ghost, 1:nz)  = 0.0_dp
 
     call mpi_sendrecv(array(1:nx, 1:n_ghost, 1:nz), &  !<=== sending
     nx*nz*n_ghost, &                                       !<=== the size
@@ -876,6 +1149,9 @@ subroutine extend_array_to_y_ranks_3D_L(array, nx, ny, nz, n_ghost)
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
 
+    array(1:nx, -n_ghost+1:0, 1:nz)     = .false.
+    array(1:nx, ny+1:ny+n_ghost, 1:nz)  = .false.
+
     call mpi_sendrecv(array(1:nx, 1:n_ghost, 1:nz), &  !<=== sending
     nx*nz*n_ghost, &                                       !<=== the size
     mpi_logical, &                          !<=== type
@@ -924,6 +1200,9 @@ subroutine extend_array_to_z_ranks_3D_C(array, nx, ny, nz, n_ghost)
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
 
+    array(1:nx, 1:ny, -n_ghost+1:0)     = Z_0
+    array(1:nx, 1:ny, nz+1:nz+n_ghost)  = Z_0
+
     call mpi_sendrecv(array(1:nx, 1:ny, 1:n_ghost), &  !<=== sending
     nx*ny*n_ghost, &                                       !<=== the size
     mpi_double_complex, &                          !<=== type
@@ -971,6 +1250,9 @@ subroutine extend_array_to_z_ranks_3D_R(array, nx, ny, nz, n_ghost)
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
 
+    array(1:nx, 1:ny, -n_ghost+1:0)     = 0.0_dp
+    array(1:nx, 1:ny, nz+1:nz+n_ghost)  = 0.0_dp
+
     call mpi_sendrecv(array(1:nx, 1:ny, 1:n_ghost), &  !<=== sending
     nx*ny*n_ghost, &                                       !<=== the size
     mpi_double_precision, &                          !<=== type
@@ -1017,6 +1299,9 @@ subroutine extend_array_to_z_ranks_3D_L(array, nx, ny, nz, n_ghost)
 #ifdef USE_MPI
     integer :: ierr
     integer :: istatus(MPI_STATUS_SIZE)
+
+    array(1:nx, 1:ny, -n_ghost+1:0)     = .false.
+    array(1:nx, 1:ny, nz+1:nz+n_ghost)  = .false.
 
     call mpi_sendrecv(array(1:nx, 1:ny, 1:n_ghost), &  !<=== sending
     nx*ny*n_ghost, &                                       !<=== the size

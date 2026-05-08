@@ -1,11 +1,19 @@
 module optimization_problem_mod
 
+#ifdef  USE_MPI
+    use mpi
+#endif
+
     use constants_mod
     use operator_mod
     use target_source_mod
     use medium_mod
     use rs_vec_base_mod
     use rs_vec_dimensions_mod
+    use design_base_mod
+    use design_1D_mod
+    use design_2D_mod
+    use design_3D_mod
     use allocator_multidim_mod
     use bicgstab_mod
 
@@ -65,11 +73,10 @@ contains
 
 !###################################################################################################
 
-subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, eta, boundaries, restart, &
+subroutine init_optprblm(this, id,dimensions, dr, freq, eps_Re, eps_Im, eta, boundaries, &
                          n_pml, grid_Ndims, n_der, mpi_cart_comm, mpi_coords, mpi_dims)
 
     class(TOptPrblm) , intent(inout) :: this
-    logical          , intent(in)    :: restart
     integer          , intent(in)    :: dimensions
     integer          , intent(in)    :: id
     integer          , intent(in)    :: boundaries(3)
@@ -259,7 +266,7 @@ subroutine solve_adjoint(this, bicgstab_tol, bicgstab_max_iter, bicgstab_L_term,
     n_trg = 1
     do n = 1, this%n_src_trg
         if (this%src_trg(n)%is_a_target) then
-
+            
             call set_jtrg(this%src_trg(n), this%j_trg)
 
             call BICGStab_L(this%A_op, this%f_adj_vec(n_trg), this%j_trg, this%f_adj_vec_new(n_trg), &
@@ -280,10 +287,10 @@ end subroutine solve_adjoint
 
 !###################################################################################################
 
-subroutine compute_gradient(this, rho_conv)
+subroutine compute_gradient(this, design)
 
     class(TOptPrblm) , intent(inout) :: this
-    real(dp)         , intent(in)    :: rho_conv(:,:,:)
+    class(TDesign)   , intent(in)    :: design
 
     complex(dp)   :: deps_drho
     real(dp)      :: eps_r
@@ -312,12 +319,15 @@ subroutine compute_gradient(this, rho_conv)
     type is (TRSvec_1D)
     select type (f_adj_vec => this%f_adj_vec)
     type is (TRSvec_1D)
+    select type (design)
+    type is (TDesign_1D)
+
         nx = this%nx
 
         if(this%is_complex) then
             do i =1, nx
-                df_drho   = C1*beta_p*(1.0/DCOSH(beta_p*(rho_conv(i,1,1)-eta_p))**2)
-                func_rho  = C1*DTANH(beta_p*(rho_conv(i,1,1)-eta_p)) + C2
+                df_drho   = C1*beta_p*(1.0/DCOSH(beta_p*(design%rho_conv(i)-eta_p))**2)
+                func_rho  = C1*DTANH(beta_p*(design%rho_conv(i)-eta_p)) + C2
                 eta       = (this%eta_max - this%eta_min)*func_rho + this%eta_min
                 kappa     = this%kappa_max*func_rho
                 deps_drho = 2.0d0*eps0*df_drho*((this%eta_max-this%eta_min)*(Z_ONE*eta-Z_I*kappa)+ &
@@ -326,7 +336,7 @@ subroutine compute_gradient(this, rho_conv)
             end do
         else
             do i = 1, nx
-                df_drho   =   C1*beta_p*(1.0/DCOSH(beta_p*(rho_conv(i,1,1)-eta_p))**2)
+                df_drho   =   C1*beta_p*(1.0/DCOSH(beta_p*(design%rho_conv(i)-eta_p))**2)
                 deps_drho =   Z_ONE * df_drho * (eps_r*eps0 - eps0)
                 this%dA(i,1,1) = -Z_I * w0 * deps_drho
             end do
@@ -355,10 +365,13 @@ subroutine compute_gradient(this, rho_conv)
             end do  
         end do
     end select
+    end select
 
     type is (TRSvec_2D)
     select type (f_adj_vec => this%f_adj_vec)
     type is (TRSvec_2D)
+    select type (design)
+    type is (TDesign_2D)
 
         nx = this%nx
         ny = this%ny
@@ -366,8 +379,8 @@ subroutine compute_gradient(this, rho_conv)
         if (this%is_complex) then
             do j = 1, ny
             do i = 1, nx
-                df_drho   = C1*beta_p*(1.0/DCOSH(beta_p*(rho_conv(i,j,1)-eta_p))**2)
-                func_rho  = C1*DTANH(beta_p*(rho_conv(i,j,1)-eta_p)) + C2
+                df_drho   = C1*beta_p*(1.0/DCOSH(beta_p*(design%rho_conv(i,j)-eta_p))**2)
+                func_rho  = C1*DTANH(beta_p*(design%rho_conv(i,j)-eta_p)) + C2
                 eta       = (this%eta_max - this%eta_min)*func_rho + this%eta_min
                 kappa     = this%kappa_max*func_rho
                 deps_drho = 2.0d0*eps0*df_drho*((this%eta_max-this%eta_min)*(Z_ONE*eta-Z_I*kappa)+ &
@@ -378,7 +391,7 @@ subroutine compute_gradient(this, rho_conv)
         else
             do j = 1, ny
             do i = 1, nx
-                df_drho   =   C1*beta_p*(1.0/DCOSH(beta_p*(rho_conv(i,j,1)-eta_p))**2)
+                df_drho   =   C1*beta_p*(1.0/DCOSH(beta_p*(design%rho_conv(i,j)-eta_p))**2)
                 deps_drho =   Z_ONE * df_drho * (eps_r*eps0 - eps0)
                 this%dA(i,j,1) = -Z_I * w0 * deps_drho 
             end do
@@ -419,10 +432,13 @@ subroutine compute_gradient(this, rho_conv)
         end do
         end do
     end select
+    end select
 
     type is (TRSvec_3D)
     select type (f_adj_vec => this%f_adj_vec)
     type is (TRSvec_3D)
+    select type (design)
+    type is (TDesign_3D)
 
         nx = this%nx
         ny = this%ny
@@ -432,8 +448,8 @@ subroutine compute_gradient(this, rho_conv)
             do k = 1, nz
             do j = 1, ny
             do i = 1, nx
-                df_drho   = C1*beta_p*(1.0/DCOSH(beta_p*(rho_conv(i,j,k)-eta_p))**2)
-                func_rho  = C1*DTANH(beta_p*(rho_conv(i,j,k)-eta_p)) + C2
+                df_drho   = C1*beta_p*(1.0/DCOSH(beta_p*(design%rho_conv(i,j,k)-eta_p))**2)
+                func_rho  = C1*DTANH(beta_p*(design%rho_conv(i,j,k)-eta_p)) + C2
                 eta       = (this%eta_max - this%eta_min)*func_rho + this%eta_min
                 kappa     = this%kappa_max*func_rho
                 deps_drho = 2.0d0*eps0*df_drho*((this%eta_max-this%eta_min)*(Z_ONE*eta-Z_I*kappa)+ &
@@ -446,7 +462,7 @@ subroutine compute_gradient(this, rho_conv)
             do k = 1, nz
             do j = 1, ny
             do i = 1, nx
-                df_drho   =   C1*beta_p*(1.0/DCOSH(beta_p*(rho_conv(i,j,k)-eta_p))**2)
+                df_drho   =   C1*beta_p*(1.0/DCOSH(beta_p*(design%rho_conv(i,j,k)-eta_p))**2)
                 deps_drho =   Z_ONE * df_drho * (eps_r*eps0 - eps0)
                 this%dA(i,j,k) = -Z_I * w0 * deps_drho 
             end do
@@ -490,6 +506,7 @@ subroutine compute_gradient(this, rho_conv)
         end do
 
     end select
+    end select
 
     end select
 
@@ -497,10 +514,10 @@ end subroutine compute_gradient
 
 !###################################################################################################
 
-subroutine update_permittivity(this, rho_conv)
+subroutine update_permittivity(this, design)
 
     class(TOptPrblm) , intent(inout) :: this
-    real(dp)         , intent(in)    :: rho_conv(:,:,:)
+    class(TDesign) , intent(in)      :: design
 
     integer :: i, j, k
     real(dp) :: beta_p
@@ -522,26 +539,26 @@ subroutine update_permittivity(this, rho_conv)
     C1 = 1.0d0 / (DTANH(beta_p*eta_p) + DTANH(beta_p*(1.0-eta_p)))
     C2 = DTANH(beta_p*eta_p)*C1
 
-    select case (this%dimensions)
-    case (1)
+    select type (design)
+    type is (TDesign_1D)
         if (this%is_complex) then
             do k = 1, this%nz
-                func_rho  = C1*DTANH(beta_p*(rho_conv(k,1,1)-eta_p)) + C2
+                func_rho  = C1*DTANH(beta_p*(design%rho_conv(k)-eta_p)) + C2
                 eta       = (eta_max - eta_min)*func_rho + eta_min
                 kappa     = kappa_max*func_rho
                 this%eps_r%mat1D(k) = Z_ONE*eps0*(eta**2 - kappa**2) - Z_I*2.0d0*eps0*eta*kappa
             end do
         else
             do k = 1, this%nz
-                func_rho  = C1*DTANH(beta_p*(rho_conv(k,1,1)-eta_p)) + C2
+                func_rho  = C1*DTANH(beta_p*(design%rho_conv(k)-eta_p)) + C2
                 this%eps_r%mat1D(k) = Z_ONE*(func_rho*(eps_Re*eps0 - eps0) + eps0)
             end do
         end if
-    case (2)
+    type is (TDesign_2D)
         if (this%is_complex) then
             do j = 1, this%ny
             do i = 1, this%nx
-                func_rho  = C1*DTANH(beta_p*(rho_conv(i,j,1)-eta_p)) + C2
+                func_rho  = C1*DTANH(beta_p*(design%rho_conv(i,j)-eta_p)) + C2
                 eta       = (eta_max - eta_min)*func_rho + eta_min
                 kappa     = kappa_max*func_rho
                 this%eps_r%mat2D(i,j) = Z_ONE*eps0*(eta**2 - kappa**2) - Z_I*2.0d0*eps0*eta*kappa
@@ -550,18 +567,18 @@ subroutine update_permittivity(this, rho_conv)
         else
             do j = 1, this%ny
             do i = 1, this%nx
-                func_rho  = C1*DTANH(beta_p*(rho_conv(i,j,1)-eta_p)) + C2
+                func_rho  = C1*DTANH(beta_p*(design%rho_conv(i,j)-eta_p)) + C2
                 this%eps_r%mat2D(i,j) = Z_ONE*(func_rho*(eps_Re*eps0 - eps0) + eps0)
             end do
             end do
         end if
-    case (3)
+    type is (TDesign_3D)
 
         if (this%is_complex) then
             do k = 1, this%nz
             do j = 1, this%ny
             do i = 1, this%nx
-                func_rho  = C1*DTANH(beta_p*(rho_conv(i,j,k)-eta_p)) + C2
+                func_rho  = C1*DTANH(beta_p*(design%rho_conv(i,j,k)-eta_p)) + C2
                 eta       = (eta_max - eta_min)*func_rho + eta_min
                 kappa     = kappa_max*func_rho
                 this%eps_r%mat3D(i,j,k) = Z_ONE*eps0*(eta**2 - kappa**2) - Z_I*2.0d0*eps0*eta*kappa
@@ -572,7 +589,7 @@ subroutine update_permittivity(this, rho_conv)
             do k = 1, this%nz
             do j = 1, this%ny
             do i = 1, this%nx
-                func_rho  = C1*DTANH(beta_p*(rho_conv(i,j,k)-eta_p)) + C2
+                func_rho  = C1*DTANH(beta_p*(design%rho_conv(i,j,k)-eta_p)) + C2
                 this%eps_r%mat3D(i,j,k) = Z_ONE*(func_rho*(eps_Re*eps0 - eps0) + eps0)
             end do
             end do
@@ -713,17 +730,14 @@ subroutine read_opt_region(prblm, dr, grid_Ndims, mpi_coords, mpi_dims)
     character(len=20) :: input_name
     integer           :: ierr, funit
     integer           :: i_ndx, j_ndx, k_ndx
-    integer           :: i_min, i_max, j_min, j_max, k_min, k_max
+    integer           :: nx, ny, nz
+    integer           :: rank_x, rank_y, rank_z
     real(dp)          :: x, y, z
 
 
-    i_min = mpi_coords(1)*prblm%nx + 1
-    i_max = (mpi_coords(1)+1)*prblm%nx
-    j_min = mpi_coords(2)*prblm%ny + 1
-    j_max = (mpi_coords(2)+1)*prblm%ny
-    k_min = mpi_coords(3)*prblm%nz + 1
-    k_max = (mpi_coords(3)+1)*prblm%nz
-
+    nx = prblm%nx
+    ny = prblm%ny
+    nz = prblm%nz
 
     write(file_number, '(I3.3)') prblm%id
 
@@ -766,8 +780,12 @@ subroutine read_opt_region(prblm, dr, grid_Ndims, mpi_coords, mpi_dims)
             i_ndx = int(x/dr) + int(grid_Ndims(1)*mpi_dims(1)/2)
             j_ndx = int(y/dr) + int(grid_Ndims(2)*mpi_dims(2)/2)
 
-            if ((i_ndx >= i_min .and. i_ndx <= i_max) .and. &
-                (j_ndx >= j_min .and. j_ndx <= j_max)) then
+            rank_x = int((i_ndx-1)/nx)
+            rank_y = int((j_ndx-1)/ny)
+
+            if (rank_x == mpi_coords(1) .and. rank_y == mpi_coords(2)) then
+                i_ndx = i_ndx - rank_x*nx
+                j_ndx = j_ndx - rank_y*ny
                 prblm%opt_region(i_ndx,j_ndx,1) = .true.
             end if
 
@@ -783,9 +801,16 @@ subroutine read_opt_region(prblm, dr, grid_Ndims, mpi_coords, mpi_dims)
             j_ndx = int(y/dr) + int(grid_Ndims(2)*mpi_dims(2)/2)
             k_ndx = int(z/dr) + int(grid_Ndims(3)*mpi_dims(3)/2)
 
-            if ((i_ndx >= i_min .and. i_ndx <= i_max) .and. &
-                (j_ndx >= j_min .and. j_ndx <= j_max) .and. &
-                (k_ndx >= k_min .and. k_ndx <= k_max)) then
+            rank_x = int((i_ndx-1)/nx)
+            rank_y = int((j_ndx-1)/ny)
+            rank_z = int((k_ndx-1)/nz)
+
+            if (rank_x == mpi_coords(1) .and. rank_y == mpi_coords(2) .and. &
+                rank_z == mpi_coords(3)) then
+
+                i_ndx = i_ndx - rank_x*nx
+                j_ndx = j_ndx - rank_y*ny
+                k_ndx = k_ndx - rank_z*nz
                 prblm%opt_region(i_ndx,j_ndx,k_ndx) = .true.
             end if
         end do
@@ -831,6 +856,140 @@ subroutine clean_opt_region(prblm)
 
 end subroutine clean_opt_region
 
+!###################################################################################################
+
+subroutine read_problem_from_restart_file(prblm, design, mpi_dims, mpi_coords, p_prblm, &
+                                          unit_restart, n_problems)
+
+    type(TOptPrblm), intent(inout) :: prblm
+    class(TDesign) , intent(inout) :: design
+    integer        , intent(inout) :: unit_restart
+    integer        , intent(in)    :: mpi_dims(3)
+    integer        , intent(in)    :: mpi_coords(3)
+    integer        , intent(in)    :: p_prblm
+    integer        , intent(in)    :: n_problems
+
+    
+    character(len=100) :: input_file
+    character(len=20)  :: restart_file = "./restart/restart"
+    character(len=10)  :: mpi_name = "mpi_coords"
+    character(len=5)   :: extension = ".bin"
+    character(len=10)  :: x_rank, y_rank, z_rank
+    integer            :: ierr
+    integer            :: t
+
+#ifdef USE_MPI
+
+    write(x_rank, '(A,I3.3)') "_x", mpi_coords(1)
+    write(y_rank, '(A,I3.3)') "_y", mpi_coords(2)
+    write(z_rank, '(A,I3.3)') "_z", mpi_coords(3)
+
+    mpi_name = trim(mpi_name) // trim(x_rank) // trim(y_rank) // trim(z_rank)
+    input_file = trim(restart_file)// "_" // trim(mpi_name) // trim(extension)
+
+#else
+    input_file = trim(restart_file) // trim(extension)
+#endif
+
+    if (p_prblm == 1) then
+            inquire(file=trim(input_file), iostat=ierr)
+            if (ierr /= 0) then
+                write(*,*) 'Error: Restart file does not count:'
+                write(*,*) trim(input_file)
+                error stop
+            end if
+
+            open(newunit=unit_restart, file=trim(input_file), status='old', action='read', &
+                access='stream', form='unformatted', iostat=ierr)
+
+            if (ierr /= 0) then
+                write(*,*) 'Error opening restart file:'
+                write(*,*) trim(input_file)
+                error stop
+            end if
+
+           select type (design)
+            type is (TDesign_1D)
+                read(unit_restart) design%rho(:)
+            type is (TDesign_2D)
+                read(unit_restart) design%rho(:,:)
+            type is (TDesign_3D)
+                read(unit_restart) design%rho(:,:,:)
+            end select
+    end if
+
+    select type (f_vec => prblm%f_vec)
+    
+        class is (TRSvec_1D)
+        select type (f_adj_list => prblm%f_adj_vec)
+        class is (TRSvec_1D)
+
+            read(unit_restart) f_vec%pl_x
+            read(unit_restart) f_vec%pl_y
+            read(unit_restart) f_vec%mi_x
+            read(unit_restart) f_vec%mi_y
+
+            do t = 1, prblm%n_trg
+                read(unit_restart) f_adj_list(t)%pl_x
+                read(unit_restart) f_adj_list(t)%pl_y
+                read(unit_restart) f_adj_list(t)%mi_x
+                read(unit_restart) f_adj_list(t)%mi_y
+            end do
+
+        end select
+        class is (TRSvec_2D)
+        select type (f_adj_list => prblm%f_adj_vec)
+        class is (TRSvec_2D)
+
+            read(unit_restart) f_vec%pl_x
+            read(unit_restart) f_vec%pl_y
+            read(unit_restart) f_vec%pl_z
+            read(unit_restart) f_vec%mi_x
+            read(unit_restart) f_vec%mi_y
+            read(unit_restart) f_vec%mi_z
+
+            do t = 1, prblm%n_trg
+                read(unit_restart) f_adj_list(t)%pl_x
+                read(unit_restart) f_adj_list(t)%pl_y
+                read(unit_restart) f_adj_list(t)%pl_z
+                read(unit_restart) f_adj_list(t)%mi_x
+                read(unit_restart) f_adj_list(t)%mi_y
+                read(unit_restart) f_adj_list(t)%mi_z
+            end do
+
+        end select
+        class is (TRSvec_3D)
+        select type (f_adj_list => prblm%f_adj_vec)
+        class is (TRSvec_3D)
+
+            read(unit_restart) f_vec%pl_x
+            read(unit_restart) f_vec%pl_y
+            read(unit_restart) f_vec%pl_z
+            read(unit_restart) f_vec%mi_x
+            read(unit_restart) f_vec%mi_y
+            read(unit_restart) f_vec%mi_z
+
+            do t = 1, prblm%n_trg
+                read(unit_restart) f_adj_list(t)%pl_x
+                read(unit_restart) f_adj_list(t)%pl_y
+                read(unit_restart) f_adj_list(t)%pl_z
+                read(unit_restart) f_adj_list(t)%mi_x
+                read(unit_restart) f_adj_list(t)%mi_y
+                read(unit_restart) f_adj_list(t)%mi_z
+            end do
+
+        end select
+    end select
+
+    if (p_prblm == n_problems) then
+         close(unit_restart)
+    end if
+
+#ifdef USE_MPI
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+#endif
+
+end subroutine read_problem_from_restart_file
 !###################################################################################################
 
 end module optimization_problem_mod

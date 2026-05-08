@@ -302,6 +302,7 @@ subroutine apply_operator_1D(Aop, f_vec, Af_vec, eps_r, transpose)
     complex(dp) :: Ex
     integer     :: sign = 1
     integer     :: i, ii
+    integer     :: n_ghost
 
     if (transpose) sign = -1
 
@@ -310,19 +311,21 @@ subroutine apply_operator_1D(Aop, f_vec, Af_vec, eps_r, transpose)
     C3 = -Aop%w0 * Z_I / (2.0d0 * eps0)
     C4 =  Z_ONE * eps0
 
+    n_ghost = Aop%n_der
+
 #ifdef USE_MPI
     ! If MPI is being used, the periodic condition were already applied.
 #else
     if (Aop%boundaries(1) == PERIODIC_BOUNDARIES) then
 
-        f_vec%pl_x(-3:0)                  = f_vec%pl_x(f_vec%nx-3:f_vec%nx)
-        f_vec%pl_x(f_vec%nx+1:f_vec%nx+4) = f_vec%pl_x(1:4)
-        f_vec%pl_y(-3:0)                  = f_vec%pl_y(f_vec%nx-3:f_vec%nx)
-        f_vec%pl_y(f_vec%nx+1:f_vec%nx+4) = f_vec%pl_y(1:4)
-        f_vec%mi_x(-3:0)                  = f_vec%mi_x(f_vec%nx-3:f_vec%nx)
-        f_vec%mi_x(f_vec%nx+1:f_vec%nx+4) = f_vec%mi_x(1:4)
-        f_vec%mi_y(-3:0)                  = f_vec%mi_y(f_vec%nx-3:f_vec%nx)
-        f_vec%mi_y(f_vec%nx+1:f_vec%nx+4) = f_vec%mi_y(1:4)
+        f_vec%pl_x(-n_ghost+1:0)                     = f_vec%pl_x(f_vec%nx-n_ghost+1:f_vec%nx)
+        f_vec%pl_x(f_vec%nx+1:f_vec%nx+n_ghost)      = f_vec%pl_x(1:n_ghost)
+        f_vec%pl_y(-n_ghost+1:0)                     = f_vec%pl_y(f_vec%nx-n_ghost+1:f_vec%nx)
+        f_vec%pl_y(f_vec%nx+1:f_vec%nx+n_ghost)      = f_vec%pl_y(1:n_ghost)
+        f_vec%mi_x(-n_ghost+1:0)                     = f_vec%mi_x(f_vec%nx-n_ghost+1:f_vec%nx)
+        f_vec%mi_x(f_vec%nx+1:f_vec%nx+n_ghost)      = f_vec%mi_x(1:n_ghost)
+        f_vec%mi_y(-n_ghost+1:0)                     = f_vec%mi_y(f_vec%nx-n_ghost+1:f_vec%nx)
+        f_vec%mi_y(f_vec%nx+1:f_vec%nx+n_ghost)      = f_vec%mi_y(1:n_ghost)
 
     end if
 #endif
@@ -368,6 +371,7 @@ subroutine apply_operator_2D(Aop, f_vec, Af_vec, eps_r, transpose)
     integer     :: sign = 1
     integer     :: i, ii
     integer     :: j, jj
+    integer     :: n_ghost
 
     if (transpose) sign = -1
 
@@ -376,40 +380,66 @@ subroutine apply_operator_2D(Aop, f_vec, Af_vec, eps_r, transpose)
     C3 = -Aop%w0 * Z_I / (2.0d0 * eps0)
     C4 =  Z_ONE * eps0
 
+    n_ghost = Aop%n_der
+
 #ifdef USE_MPI
     ! If MPI is being used, the periodic condition were already applied.
 #else
     if (Aop%boundaries(1) == PERIODIC_BOUNDARIES) then
 
-        f_vec%pl_x(-3:0, :)                  = f_vec%pl_x(f_vec%nx-3:f_vec%nx, :)
-        f_vec%pl_x(f_vec%nx+1:f_vec%nx+4, :) = f_vec%pl_x(1:4, :)
-        f_vec%pl_y(-3:0, :)                  = f_vec%pl_y(f_vec%nx-3:f_vec%nx, :)
-        f_vec%pl_y(f_vec%nx+1:f_vec%nx+4, :) = f_vec%pl_y(1:4, :)
-        f_vec%pl_z(-3:0, :)                  = f_vec%pl_z(f_vec%nx-3:f_vec%nx, :)
-        f_vec%pl_z(f_vec%nx+1:f_vec%nx+4, :) = f_vec%pl_z(1:4, :)
-        f_vec%mi_x(-3:0, :)                  = f_vec%mi_x(f_vec%nx-3:f_vec%nx, :)
-        f_vec%mi_x(f_vec%nx+1:f_vec%nx+4, :) = f_vec%mi_x(1:4, :)
-        f_vec%mi_y(-3:0, :)                  = f_vec%mi_y(f_vec%nx-3:f_vec%nx, :)
-        f_vec%mi_y(f_vec%nx+1:f_vec%nx+4, :) = f_vec%mi_y(1:4, :)
-        f_vec%mi_z(-3:0, :)                  = f_vec%mi_z(f_vec%nx-3:f_vec%nx, :)
-        f_vec%mi_z(f_vec%nx+1:f_vec%nx+4, :) = f_vec%mi_z(1:4, :)
+        f_vec%pl_x(-n_ghost+1:0, 1:f_vec%ny)                = &
+            f_vec%pl_x(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny)
+        f_vec%pl_x(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny) = &
+            f_vec%pl_x(1:n_ghost, 1:f_vec%ny)
+        f_vec%pl_y(-n_ghost+1:0, 1:f_vec%ny)                = &
+            f_vec%pl_y(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny)
+        f_vec%pl_y(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny) = &
+            f_vec%pl_y(1:n_ghost, 1:f_vec%ny)
+        f_vec%pl_z(-n_ghost+1:0, 1:f_vec%ny)                = &
+            f_vec%pl_z(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny)
+        f_vec%pl_z(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny) = &
+            f_vec%pl_z(1:n_ghost, 1:f_vec%ny)
+        f_vec%mi_x(-n_ghost+1:0, 1:f_vec%ny)                = &
+            f_vec%mi_x(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny)
+        f_vec%mi_x(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny) = &
+            f_vec%mi_x(1:n_ghost, 1:f_vec%ny)
+        f_vec%mi_y(-n_ghost+1:0, 1:f_vec%ny)                = &
+            f_vec%mi_y(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny)
+        f_vec%mi_y(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny) = &
+            f_vec%mi_y(1:n_ghost, 1:f_vec%ny)
+        f_vec%mi_z(-n_ghost+1:0, 1:f_vec%ny)                = &
+            f_vec%mi_z(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny)
+        f_vec%mi_z(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny) = &
+            f_vec%mi_z(1:n_ghost, 1:f_vec%ny)
 
     end if
 
     if (Aop%boundaries(2) == PERIODIC_BOUNDARIES) then
 
-        f_vec%pl_x(:, -3:0)                  = f_vec%pl_x(:, f_vec%ny-3:f_vec%ny)
-        f_vec%pl_x(:, f_vec%ny+1:f_vec%ny+4) = f_vec%pl_x(:, 1:4)
-        f_vec%pl_y(:, -3:0)                  = f_vec%pl_y(:, f_vec%ny-3:f_vec%ny)
-        f_vec%pl_y(:, f_vec%ny+1:f_vec%ny+4) = f_vec%pl_y(:, 1:4)
-        f_vec%pl_z(:, -3:0)                  = f_vec%pl_z(:, f_vec%ny-3:f_vec%ny)
-        f_vec%pl_z(:, f_vec%ny+1:f_vec%ny+4) = f_vec%pl_z(:, 1:4)
-        f_vec%mi_x(:, -3:0)                  = f_vec%mi_x(:, f_vec%ny-3:f_vec%ny)
-        f_vec%mi_x(:, f_vec%ny+1:f_vec%ny+4) = f_vec%mi_x(:, 1:4)
-        f_vec%mi_y(:, -3:0)                  = f_vec%mi_y(:, f_vec%ny-3:f_vec%ny)
-        f_vec%mi_y(:, f_vec%ny+1:f_vec%ny+4) = f_vec%mi_y(:, 1:4)
-        f_vec%mi_z(:, -3:0)                  = f_vec%mi_z(:, f_vec%ny-3:f_vec%ny)
-        f_vec%mi_z(:, f_vec%ny+1:f_vec%ny+4) = f_vec%mi_z(:, 1:4)
+        f_vec%pl_x(1:f_vec%nx, -n_ghost+1:0)                = &
+            f_vec%pl_x(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny)
+        f_vec%pl_x(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost) = &
+            f_vec%pl_x(1:f_vec%nx, 1:n_ghost)
+        f_vec%pl_y(1:f_vec%nx, -n_ghost+1:0)                = &
+            f_vec%pl_y(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny)
+        f_vec%pl_y(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost) = &
+            f_vec%pl_y(1:f_vec%nx, 1:n_ghost)
+        f_vec%pl_z(1:f_vec%nx, -n_ghost+1:0)                = &
+            f_vec%pl_z(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny)
+        f_vec%pl_z(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost) = &
+            f_vec%pl_z(1:f_vec%nx, 1:n_ghost)
+        f_vec%mi_x(1:f_vec%nx, -n_ghost+1:0)                = &
+            f_vec%mi_x(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny)
+        f_vec%mi_x(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost) = &
+            f_vec%mi_x(1:f_vec%nx, 1:n_ghost)
+        f_vec%mi_y(1:f_vec%nx, -n_ghost+1:0)                = &
+            f_vec%mi_y(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny)
+        f_vec%mi_y(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost) = &
+            f_vec%mi_y(1:f_vec%nx, 1:n_ghost)
+        f_vec%mi_z(1:f_vec%nx, -n_ghost+1:0)                = &
+            f_vec%mi_z(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny)
+        f_vec%mi_z(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost) = &
+            f_vec%mi_z(1:f_vec%nx, 1:n_ghost)
 
     end if
 #endif
@@ -491,6 +521,7 @@ subroutine apply_operator_3D(Aop, f_vec, Af_vec, eps_r, transpose)
     integer     :: i, ii
     integer     :: j, jj
     integer     :: k, kk
+    integer     :: n_ghost
 
     if (transpose) sign = -1
 
@@ -499,52 +530,86 @@ subroutine apply_operator_3D(Aop, f_vec, Af_vec, eps_r, transpose)
     C3 = -Aop%w0 * Z_I / (2.0d0 * eps0)
     C4 =  Z_ONE * eps0
 
+    n_ghost = Aop%n_der
+
 #ifdef USE_MPI
     ! If MPI is being used, the periodic condition were already applied.
 #else
     if (Aop%boundaries(1) == PERIODIC_BOUNDARIES) then
-        f_vec%pl_x(-3:0, :, :)                  = f_vec%pl_x(f_vec%nx-3:f_vec%nx, :, :)
-        f_vec%pl_x(f_vec%nx+1:f_vec%nx+4, :, :) = f_vec%pl_x(1:4, :, :)
-        f_vec%pl_y(-3:0, :, :)                  = f_vec%pl_y(f_vec%nx-3:f_vec%nx, :, :)
-        f_vec%pl_y(f_vec%nx+1:f_vec%nx+4, :, :) = f_vec%pl_y(1:4, :, :)
-        f_vec%pl_z(-3:0, :, :)                  = f_vec%pl_z(f_vec%nx-3:f_vec%nx, :, :)
-        f_vec%pl_z(f_vec%nx+1:f_vec%nx+4, :, :) = f_vec%pl_z(1:4, :, :)
-        f_vec%mi_x(-3:0, :, :)                  = f_vec%mi_x(f_vec%nx-3:f_vec%nx, :, :)
-        f_vec%mi_x(f_vec%nx+1:f_vec%nx+4, :, :) = f_vec%mi_x(1:4, :, :)
-        f_vec%mi_y(-3:0, :, :)                  = f_vec%mi_y(f_vec%nx-3:f_vec%nx, :, :)
-        f_vec%mi_y(f_vec%nx+1:f_vec%nx+4, :, :) = f_vec%mi_y(1:4, :, :)
-        f_vec%mi_z(-3:0, :, :)                  = f_vec%mi_z(f_vec%nx-3:f_vec%nx, :, :)
-        f_vec%mi_z(f_vec%nx+1:f_vec%nx+4, :, :) = f_vec%mi_z(1:4, :, :)
+        f_vec%pl_x(-n_ghost+1:0, 1:f_vec%ny, 1:f_vec%nz)                = &
+            f_vec%pl_x(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%pl_x(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny, 1:f_vec%nz) = &
+            f_vec%pl_x(1:n_ghost, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%pl_y(-n_ghost+1:0, 1:f_vec%ny, 1:f_vec%nz)                = &
+            f_vec%pl_y(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%pl_y(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny, 1:f_vec%nz) = &
+            f_vec%pl_y(1:n_ghost, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%pl_z(-n_ghost+1:0, 1:f_vec%ny, 1:f_vec%nz)                = &
+            f_vec%pl_z(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%pl_z(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny, 1:f_vec%nz) = &
+            f_vec%pl_z(1:n_ghost, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%mi_x(-n_ghost+1:0, 1:f_vec%ny, 1:f_vec%nz)                = &
+            f_vec%mi_x(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%mi_x(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny, 1:f_vec%nz) = &
+            f_vec%mi_x(1:n_ghost, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%mi_y(-n_ghost+1:0, 1:f_vec%ny, 1:f_vec%nz)                = &
+            f_vec%mi_y(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%mi_y(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny, 1:f_vec%nz) = &
+            f_vec%mi_y(1:n_ghost, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%mi_z(-n_ghost+1:0, 1:f_vec%ny, 1:f_vec%nz)                = &
+            f_vec%mi_z(f_vec%nx-n_ghost+1:f_vec%nx, 1:f_vec%ny, 1:f_vec%nz)
+        f_vec%mi_z(f_vec%nx+1:f_vec%nx+n_ghost, 1:f_vec%ny, 1:f_vec%nz) = &
+            f_vec%mi_z(1:n_ghost, 1:f_vec%ny, 1:f_vec%nz)
     end if
 
     if (Aop%boundaries(2) == PERIODIC_BOUNDARIES) then
-        f_vec%pl_x(:, -3:0, :)                  = f_vec%pl_x(:, f_vec%ny-3:f_vec%ny, :)
-        f_vec%pl_x(:, f_vec%ny+1:f_vec%ny+4, :) = f_vec%pl_x(:, 1:4, :)
-        f_vec%pl_y(:, -3:0, :)                  = f_vec%pl_y(:, f_vec%ny-3:f_vec%ny, :)
-        f_vec%pl_y(:, f_vec%ny+1:f_vec%ny+4, :) = f_vec%pl_y(:, 1:4, :)
-        f_vec%pl_z(:, -3:0, :)                  = f_vec%pl_z(:, f_vec%ny-3:f_vec%ny, :)
-        f_vec%pl_z(:, f_vec%ny+1:f_vec%ny+4, :) = f_vec%pl_z(:, 1:4, :)
-        f_vec%mi_x(:, -3:0, :)                  = f_vec%mi_x(:, f_vec%ny-3:f_vec%ny, :)
-        f_vec%mi_x(:, f_vec%ny+1:f_vec%ny+4, :) = f_vec%mi_x(:, 1:4, :)
-        f_vec%mi_y(:, -3:0, :)                  = f_vec%mi_y(:, f_vec%ny-3:f_vec%ny, :)
-        f_vec%mi_y(:, f_vec%ny+1:f_vec%ny+4, :) = f_vec%mi_y(:, 1:4, :)
-        f_vec%mi_z(:, -3:0, :)                  = f_vec%mi_z(:, f_vec%ny-3:f_vec%ny, :)
-        f_vec%mi_z(:, f_vec%ny+1:f_vec%ny+4, :) = f_vec%mi_z(:, 1:4, :)
+        f_vec%pl_x(1:f_vec%nx, -n_ghost+1:0, 1:f_vec%nz)                = &
+            f_vec%pl_x(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny, 1:f_vec%nz)
+        f_vec%pl_x(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost, 1:f_vec%nz) = &
+            f_vec%pl_x(1:f_vec%nx, 1:n_ghost, 1:f_vec%nz)
+        f_vec%pl_y(1:f_vec%nx, -n_ghost+1:0, 1:f_vec%nz)                = &
+            f_vec%pl_y(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny, 1:f_vec%nz)
+        f_vec%pl_y(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost, 1:f_vec%nz) = &
+            f_vec%pl_y(1:f_vec%nx, 1:n_ghost, 1:f_vec%nz)
+        f_vec%pl_z(1:f_vec%nx, -n_ghost+1:0, 1:f_vec%nz)                = &
+            f_vec%pl_z(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny, 1:f_vec%nz)
+        f_vec%pl_z(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost, 1:f_vec%nz) = &
+            f_vec%pl_z(1:f_vec%nx, 1:n_ghost, 1:f_vec%nz)
+        f_vec%mi_x(1:f_vec%nx, -n_ghost+1:0, 1:f_vec%nz)                = &
+            f_vec%mi_x(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny, 1:f_vec%nz)
+        f_vec%mi_y(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost, 1:f_vec%nz) = &
+            f_vec%mi_y(1:f_vec%nx, 1:n_ghost, 1:f_vec%nz)
+        f_vec%mi_z(1:f_vec%nx, -n_ghost+1:0, 1:f_vec%nz)                = &
+            f_vec%mi_z(1:f_vec%nx, f_vec%ny-n_ghost+1:f_vec%ny, 1:f_vec%nz)
+        f_vec%mi_z(1:f_vec%nx, f_vec%ny+1:f_vec%ny+n_ghost, 1:f_vec%nz) = &
+            f_vec%mi_z(1:f_vec%nx, 1:n_ghost, 1:f_vec%nz)
     end if
 
     if (Aop%boundaries(3) == PERIODIC_BOUNDARIES) then
-        f_vec%pl_x(:, :, -3:0)                  = f_vec%pl_x(:, :, f_vec%nz-3:f_vec%nz)
-        f_vec%pl_x(:, :, f_vec%nz+1:f_vec%nz+4) = f_vec%pl_x(:, :, 1:4)
-        f_vec%pl_y(:, :, -3:0)                  = f_vec%pl_y(:, :, f_vec%nz-3:f_vec%nz)
-        f_vec%pl_y(:, :, f_vec%nz+1:f_vec%nz+4) = f_vec%pl_y(:, :, 1:4)
-        f_vec%pl_z(:, :, -3:0)                  = f_vec%pl_z(:, :, f_vec%nz-3:f_vec%nz)
-        f_vec%pl_z(:, :, f_vec%nz+1:f_vec%nz+4) = f_vec%pl_z(:, :, 1:4)
-        f_vec%mi_x(:, :, -3:0)                  = f_vec%mi_x(:, :, f_vec%nz-3:f_vec%nz)
-        f_vec%mi_x(:, :, f_vec%nz+1:f_vec%nz+4) = f_vec%mi_x(:, :, 1:4)
-        f_vec%mi_y(:, :, -3:0)                  = f_vec%mi_y(:, :, f_vec%nz-3:f_vec%nz)
-        f_vec%mi_y(:, :, f_vec%nz+1:f_vec%nz+4) = f_vec%mi_y(:, :, 1:4)
-        f_vec%mi_z(:, :, -3:0)                  = f_vec%mi_z(:, :, f_vec%nz-3:f_vec%nz)
-        f_vec%mi_z(:, :, f_vec%nz+1:f_vec%nz+4) = f_vec%mi_z(:, :, 1:4)
+        f_vec%pl_x(1:f_vec%nx, 1:f_vec%ny, -n_ghost+1:0)                = &
+            f_vec%pl_x(1:f_vec%nx, 1:f_vec%ny, f_vec%nz-n_ghost+1:f_vec%nz)
+        f_vec%pl_x(1:f_vec%nx, 1:f_vec%ny, f_vec%nz+1:f_vec%nz+n_ghost) = &
+            f_vec%pl_x(1:f_vec%nx, 1:f_vec%ny, 1:n_ghost)
+        f_vec%pl_y(1:f_vec%nx, 1:f_vec%ny, -n_ghost+1:0)                = &
+            f_vec%pl_y(1:f_vec%nx, 1:f_vec%ny, f_vec%nz-n_ghost+1:f_vec%nz)
+        f_vec%pl_y(1:f_vec%nx, 1:f_vec%ny, f_vec%nz+1:f_vec%nz+n_ghost) = &
+            f_vec%pl_y(1:f_vec%nx, 1:f_vec%ny, 1:n_ghost)
+        f_vec%pl_z(1:f_vec%nx, 1:f_vec%ny, -n_ghost+1:0)                = &
+            f_vec%pl_z(1:f_vec%nx, 1:f_vec%ny, f_vec%nz-n_ghost+1:f_vec%nz)
+        f_vec%pl_z(1:f_vec%nx, 1:f_vec%ny, f_vec%nz+1:f_vec%nz+n_ghost) = &
+            f_vec%pl_z(1:f_vec%nx, 1:f_vec%ny, 1:n_ghost)
+        f_vec%mi_x(1:f_vec%nx, 1:f_vec%ny, -n_ghost+1:0)                = &
+            f_vec%mi_x(1:f_vec%nx, 1:f_vec%ny, f_vec%nz-n_ghost+1:f_vec%nz)
+        f_vec%mi_x(1:f_vec%nx, 1:f_vec%ny, f_vec%nz+1:f_vec%nz+n_ghost) = &
+            f_vec%mi_x(1:f_vec%nx, 1:f_vec%ny, 1:n_ghost)
+        f_vec%mi_y(1:f_vec%nx, 1:f_vec%ny, -n_ghost+1:0)                = &
+            f_vec%mi_y(1:f_vec%nx, 1:f_vec%ny, f_vec%nz-n_ghost+1:f_vec%nz)
+        f_vec%mi_y(1:f_vec%nx, 1:f_vec%ny, f_vec%nz+1:f_vec%nz+n_ghost) = &
+            f_vec%mi_y(1:f_vec%nx, 1:f_vec%ny, 1:n_ghost)
+        f_vec%mi_z(1:f_vec%nx, 1:f_vec%ny, -n_ghost+1:0)                = &
+            f_vec%mi_z(1:f_vec%nx, 1:f_vec%ny, f_vec%nz-n_ghost+1:f_vec%nz)
+        f_vec%mi_z(1:f_vec%nx, 1:f_vec%ny, f_vec%nz+1:f_vec%nz+n_ghost) = &
+            f_vec%mi_z(1:f_vec%nx, 1:f_vec%ny, 1:n_ghost)
     end if
 
 #endif
