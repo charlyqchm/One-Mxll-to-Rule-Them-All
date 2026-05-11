@@ -330,6 +330,8 @@ subroutine apply_operator_1D(Aop, f_vec, Af_vec, eps_r, transpose)
     end if
 #endif
 
+    !$omp parallel default(shared) private(i, ii, dfpxdz, dfpydz, dfmxdz, dfmydz, Ex)
+    !$omp do schedule(static)
     do i = 1, f_vec%nx
         
         dfpxdz = Z_0
@@ -353,6 +355,8 @@ subroutine apply_operator_1D(Aop, f_vec, Af_vec, eps_r, transpose)
         Af_vec%mi_y(i) = -C1 * dfmxdz * Aop%s_inv_x(i) + C2 * f_vec%mi_y(i)
 
     end do
+    !$omp end do
+    !$omp end parallel
     
 end subroutine apply_operator_1D
 
@@ -445,6 +449,9 @@ subroutine apply_operator_2D(Aop, f_vec, Af_vec, eps_r, transpose)
 #endif
 
 
+    !$omp parallel default(shared) private(i, j, ii, jj, dfpxdy, dfpydx, &
+    !$omp& dfpzdx, dfpzdy, dfmxdy, dfmydx, dfmzdx, dfmzdy, Ex, Ey, Ez)
+    !$omp do collapse(2) schedule(static)
     do j = 1, f_vec%ny
     do i = 1, f_vec%nx
     
@@ -501,6 +508,8 @@ subroutine apply_operator_2D(Aop, f_vec, Af_vec, eps_r, transpose)
 
     end do
     end do
+    !$omp end do
+    !$omp end parallel
 
 end subroutine apply_operator_2D
 
@@ -615,6 +624,10 @@ subroutine apply_operator_3D(Aop, f_vec, Af_vec, eps_r, transpose)
 #endif
 
 
+    !$omp parallel default(shared) private(i, j, k, ii, jj, kk, dfpxdy, dfpxdz, &
+    !$omp& dfpydx, dfpydz, dfpzdx, dfpzdy, dfmxdz, dfmxdy, dfmydz, dfmydx, &
+    !$omp& dfmzdx, dfmzdy, Ex, Ey, Ez)
+    !$omp do collapse(3) schedule(static)
     do k = 1, f_vec%nz
     do j = 1, f_vec%ny
     do i = 1, f_vec%nx
@@ -687,6 +700,8 @@ subroutine apply_operator_3D(Aop, f_vec, Af_vec, eps_r, transpose)
     end do
     end do
     end do
+    !$omp end do
+    !$omp end parallel
 
 
 end subroutine apply_operator_3D

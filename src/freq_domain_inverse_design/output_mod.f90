@@ -296,7 +296,7 @@ subroutine write_final_structure(this, eps_r, grid_Ndims, dr, p_prblm, mpi_coord
     real(dp)            , intent(in)    :: dr
 
 
-    character(len=60)  :: structure_file="./outputs/final_permitivity_prblm_"
+    character(len=60)  :: structure_file
     character(len=10)  :: prblm_number
     character(len=5)   :: extension=".out"
     integer            :: ierr
@@ -315,6 +315,8 @@ subroutine write_final_structure(this, eps_r, grid_Ndims, dr, p_prblm, mpi_coord
     nx = grid_Ndims(1)
     ny = grid_Ndims(2)
     nz = grid_Ndims(3)
+
+    structure_file = "./outputs/final_permitivity_prblm_"
 
     write(prblm_number, '(I3.3)') p_prblm
 

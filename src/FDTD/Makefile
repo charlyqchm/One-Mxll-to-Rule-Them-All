@@ -1,0 +1,77 @@
+FC ?= gfortran
+MPI_FC ?= mpif90
+USE_MPI ?= 0
+DEBUG ?= 0
+
+OPT_FFLAGS ?= -O3 -cpp -fopenmp
+DBG_FFLAGS ?= -O0 -g -cpp -fopenmp -fbacktrace -fcheck=all -Wall -Wextra -ffpe-trap=invalid,zero,overflow
+FFLAGS ?= $(OPT_FFLAGS)
+
+ifeq ($(DEBUG),1)
+FFLAGS := $(DBG_FFLAGS)
+endif
+
+ifeq ($(USE_MPI),1)
+FC := $(MPI_FC)
+FFLAGS += -DUSE_MPI
+endif
+
+LIBS ?= -ldftbplus -lblas -llapack
+INCLUDE_DIR ?= $(DFTB_INSTALL)/include/dftbplus/modfiles
+LIB_DIR ?= $(DFTB_INSTALL)/lib
+
+BUILD ?= ../../build
+PROJECT ?= fdtd
+OBJ_DIR ?= $(BUILD)/$(PROJECT)/obj
+MOD_DIR ?= $(BUILD)/$(PROJECT)/mod
+BIN_DIR ?= $(BUILD)/bin
+
+SRC_FILES := constants_mod.f90
+SRC_FILES += input_mod.f90
+SRC_FILES += detector_mod.f90
+SRC_FILES += source_mod.f90
+SRC_FILES += classical_medium_mod.f90
+SRC_FILES += mxll_base_mod.f90
+SRC_FILES += mxll_1D_mod.f90
+SRC_FILES += mxll_2D_mod.f90
+SRC_FILES += mxll_3D_mod.f90
+SRC_FILES += q_sys_base_mod.f90
+SRC_FILES += q_sys_dftb_mod.f90
+SRC_FILES += factory_mod.f90
+SRC_FILES += q_group_mod.f90
+SRC_FILES += parallel_subs_mod.f90
+SRC_FILES += write_fields_subs_mod.f90
+SRC_FILES += output_mod.f90
+SRC_FILES += interactions_mod.f90
+MAIN_FILE := mxim_mxll.f90
+
+OBJ := $(addprefix $(OBJ_DIR)/,$(SRC_FILES:.f90=.o))
+OBJ += $(OBJ_DIR)/$(MAIN_FILE:.f90=.o)
+
+EXE_NAME ?= OMxRTA.e
+EXE := $(BIN_DIR)/$(EXE_NAME)
+
+.PHONY: all mpi debug mpi_debug clean
+
+all: $(EXE)
+
+$(OBJ_DIR) $(MOD_DIR) $(BIN_DIR):
+	mkdir -p $@
+
+$(OBJ_DIR)/%.o: %.f90 | $(OBJ_DIR) $(MOD_DIR)
+	$(FC) $(FFLAGS) -o $@ -c $< -I$(INCLUDE_DIR) -I$(MOD_DIR) -J$(MOD_DIR)
+
+$(EXE): $(OBJ) | $(BIN_DIR)
+	$(FC) -o $@ $^ $(FFLAGS) -L$(LIB_DIR) $(LIBS)
+
+mpi:
+	$(MAKE) USE_MPI=1
+
+debug:
+	$(MAKE) DEBUG=1
+
+mpi_debug:
+	$(MAKE) USE_MPI=1 DEBUG=1
+
+clean:
+	rm -rf $(OBJ_DIR) $(MOD_DIR) $(EXE)

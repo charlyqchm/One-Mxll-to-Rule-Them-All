@@ -1,74 +1,60 @@
 FC ?= gfortran
-USE_MPI ?= 0
 MPI_FC ?= mpif90
-FFLAGS=-O3 -cpp -fopenmp 
-DBG_FFLAGS=-O0 -g -cpp -fopenmp -fbacktrace -fcheck=all -Wall -Wextra -ffpe-trap=invalid,zero,overflow
+USE_MPI ?= 0
+DEBUG ?= 0
 
-ifeq ($(USE_MPI),1)
-FC := $(MPI_FC)
-FFLAGS += -DUSE_MPI
-endif
-LIBS=-ldftbplus -lblas -llapack
-INCLUDE_DIR=$(DFTB_INSTALL)/include/dftbplus/modfiles
-LIB_DIR=$(DFTB_INSTALL)/lib
+# Build selectors: by default, compile both independent programs.
+FDTD ?= 1
+DESIGN ?= 1
 
-SRC_DIR ?= src/FDTD
 BUILD ?= build
-BUILD_DIR ?= $(BUILD)
-OBJ_DIR ?= $(BUILD_DIR)/obj
-MOD_DIR ?= $(BUILD_DIR)/mod
-BIN_DIR ?= $(BUILD_DIR)/bin
+BIN_DIR ?= $(BUILD)/bin
 
-SRC_FILES:=constants_mod.f90
-SRC_FILES+=input_mod.f90
-SRC_FILES+=detector_mod.f90
-SRC_FILES+=source_mod.f90
-SRC_FILES+=classical_medium_mod.f90
-SRC_FILES+=mxll_base_mod.f90
-SRC_FILES+=mxll_1D_mod.f90
-SRC_FILES+=mxll_2D_mod.f90
-SRC_FILES+=mxll_3D_mod.f90
-SRC_FILES+=q_sys_base_mod.f90
-SRC_FILES+=q_sys_dftb_mod.f90
-SRC_FILES+=factory_mod.f90
-SRC_FILES+=q_group_mod.f90
-SRC_FILES+=parallel_subs_mod.f90
-SRC_FILES+=write_fields_subs_mod.f90
-SRC_FILES+=output_mod.f90
-SRC_FILES+=interactions_mod.f90
-MAIN_FILE:=mxim_mxll.f90
+FDTD_DIR := src/FDTD
+DESIGN_DIR := src/freq_domain_inverse_design
 
-SRC := $(addprefix $(SRC_DIR)/,$(SRC_FILES))
-MAIN := $(SRC_DIR)/$(MAIN_FILE)
+SELECTED_TARGETS :=
+ifeq ($(FDTD),1)
+SELECTED_TARGETS += fdtd
+endif
+ifeq ($(DESIGN),1)
+SELECTED_TARGETS += design
+endif
 
-OBJ := $(addprefix $(OBJ_DIR)/,$(SRC_FILES:.f90=.o))
-OBJ += $(OBJ_DIR)/$(MAIN_FILE:.f90=.o)
+ifeq ($(strip $(SELECTED_TARGETS)),)
+$(error At least one build target must be enabled: use FDTD=1 and/or DESIGN=1)
+endif
 
-EXE_NAME ?= OMxRTA.e
-EXC := $(BIN_DIR)/$(EXE_NAME)
+.PHONY: all fdtd design mpi debug mpi_debug clean clean_fdtd clean_design
 
-all: $(EXC)
+all: $(SELECTED_TARGETS)
 
-$(OBJ_DIR) $(MOD_DIR) $(BIN_DIR):
-	mkdir -p $@
+fdtd:
+	$(MAKE) -C $(FDTD_DIR) \
+		FC='$(FC)' MPI_FC='$(MPI_FC)' \
+		USE_MPI='$(USE_MPI)' DEBUG='$(DEBUG)' \
+		BUILD='../../$(BUILD)' BIN_DIR='../../$(BIN_DIR)'
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.f90 | $(OBJ_DIR) $(MOD_DIR)
-	$(FC) $(FFLAGS) -o $@ -c $< -I$(INCLUDE_DIR) -I$(MOD_DIR) -J$(MOD_DIR)
+design:
+	$(MAKE) -C $(DESIGN_DIR) \
+		FC='$(FC)' MPI_FC='$(MPI_FC)' \
+		USE_MPI='$(USE_MPI)' DEBUG='$(DEBUG)' \
+		BUILD='../../$(BUILD)' BIN_DIR='../../$(BIN_DIR)'
 
-
-$(EXC): $(OBJ) | $(BIN_DIR)
-	$(FC) -o $@ $^ $(FFLAGS) -L$(LIB_DIR) $(LIBS)
-
-.PHONY: mpi
 mpi:
-	$(MAKE) USE_MPI=1
+	$(MAKE) USE_MPI=1 FDTD='$(FDTD)' DESIGN='$(DESIGN)'
 
+debug:
+	$(MAKE) DEBUG=1 FDTD='$(FDTD)' DESIGN='$(DESIGN)'
 
-.PHONY: mpi_debug
 mpi_debug:
-	$(MAKE) USE_MPI=1 FFLAGS='$(DBG_FFLAGS)'
+	$(MAKE) USE_MPI=1 DEBUG=1 FDTD='$(FDTD)' DESIGN='$(DESIGN)'
 
+clean: clean_fdtd clean_design
+	rm -rf $(BUILD)
 
-.PHONY: clean
-clean:
-	rm -rf $(BUILD_DIR)
+clean_fdtd:
+	$(MAKE) -C $(FDTD_DIR) clean BUILD='../../$(BUILD)' BIN_DIR='../../$(BIN_DIR)'
+
+clean_design:
+	$(MAKE) -C $(DESIGN_DIR) clean BUILD='../../$(BUILD)' BIN_DIR='../../$(BIN_DIR)'
